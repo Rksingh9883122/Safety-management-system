@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-panel">
+    <p class="eyebrow">ORGANIZATION WORKSPACE</p>
+    <h2>Administrator sign in</h2>
+    <p class="text-muted">Sign in to manage your organization's safety data and dashboard.</p>
+
+    {% if error %}
+        <p class="auth-alert" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('admin_login', next=request.args.get('next', '')) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label for="email">Work email</label>
+            <input type="email" id="email" name="email" maxlength="254" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+        </div>
+        <button type="submit">Sign In</button>
+    </form>
+    <p><a href="{{ url_for('resend_verification') }}">Resend email verification</a></p>
+    <p>Forgot your password? Ask your organization administrator to send you a reset link.</p>
+    <p class="auth-footnote">
+        {% if registration_enabled %}
+            Need an organization workspace? <a href="{{ url_for('register_organization') }}">Register your organization</a>.
+        {% else %}
+            New organization registration is temporarily unavailable. Contact your system administrator.
+        {% endif %}
+    </p>
+</section>
+
+<style>
+    .auth-panel { max-width: 540px; margin: 2rem auto; padding: 2rem; border: 1px solid #dfe7ef; border-radius: 12px; }
+    .auth-panel h2 { margin-top: .25rem; }
+    .eyebrow { color: var(--do-teal); font-weight: 700; letter-spacing: .12em; font-size: .78rem; }
+    .auth-alert { padding: 12px; color: #8a1c1c; background: #fee2e2; border-radius: 4px; }
+    .auth-footnote { margin-top: 1.5rem; color: #596579; }
+    .auth-footnote a { color: var(--plan-blue); font-weight: 600; }
+</style>
+{% endblock %}

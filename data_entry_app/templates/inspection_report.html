@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    h2 { border-bottom-color: var(--plan-blue); }
+    .checklist-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .checklist-description { flex: 1; }
+    .checklist-options {
+        display: flex;
+        gap: 12px;
+        white-space: nowrap;
+    }
+    .checklist-options label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .inspection-note {
+        color: #465365;
+        margin: 8px 0 14px;
+    }
+    @media (max-width: 760px) {
+        .checklist-item { align-items: flex-start; flex-direction: column; }
+        .checklist-options { padding-left: 4px; }
+    }
+</style>
+
+<h2>Site Inspection & Walkthrough Checklist</h2>
+<form action="/submit_inspection" method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+        <label for="contractor_id">Contractor / Subcontractor:</label>
+        <select name="contractor_id" id="contractor_id" required>
+            <option value="">-- Select organization --</option>
+            {% for contractor in contractors %}
+                <option value="{{ contractor.contractor_id }}">{{ contractor.company_name }} ({{ contractor.contractor_type }})</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group" style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <label for="inspection_date">Date of Inspection:</label>
+            <input type="date" name="inspection_date" required>
+        </div>
+        <div style="flex: 1;">
+            <label for="inspector_name">Inspector / Auditor Name:</label>
+            <input type="text" name="inspector_name" required>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="trade_type">Primary Operation / Trade Inspected:</label>
+        <select name="trade_type" id="trade_type" required>
+            <option value="">-- Select industry and activity --</option>
+            {% for industry, activities in inspection_checkpoints.items() %}
+                <optgroup label="{{ industry }}">
+                    {% for activity in activities %}
+                        <option value="{{ industry }}::{{ activity }}">{{ activity }}</option>
+                    {% endfor %}
+                </optgroup>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="section-header">Activity-Specific Critical Safety Checkpoints</div>
+    <p class="inspection-note">Select the operation to load its critical checkpoints. Use the approved site permit, risk assessment, and applicable local requirements; mark N/A only when a checkpoint does not apply.</p>
+    <div id="inspection_checklist" aria-live="polite"></div>
+
+    <div class="form-group" style="margin-top: 20px;">
+        <label for="major_findings">Major Findings / Violations Noted:</label>
+        <textarea name="major_findings" rows="4"></textarea>
+    </div>
+
+    <button type="submit" style="background-color: var(--plan-blue);">Log Inspection Report</button>
+</form>
+
+<script id="inspection-checkpoint-data" type="application/json">{{ inspection_checkpoints|tojson }}</script>
+<script>
+    const operationSelect = document.getElementById('trade_type');
+    const checklistContainer = document.getElementById('inspection_checklist');
+    const checkpointData = JSON.parse(
+        document.getElementById('inspection-checkpoint-data').textContent
+    );
+    const activityCheckpoints = Object.entries(checkpointData).flatMap(
+        ([industry, activities]) => Object.entries(activities).map(
+            ([activity, checkpoints]) => [`${industry}::${activity}`, checkpoints]
+        )
+    ).reduce((result, [activityKey, checkpoints]) => {
+        result[activityKey] = checkpoints;
+        return result;
+    }, {});
+
+    function renderInspectionChecklist() {
+        checklistContainer.replaceChildren();
+        const checkpoints = activityCheckpoints[operationSelect.value] || [];
+        checkpoints.forEach((description, index) => {
+            const row = document.createElement('div');
+            row.className = 'checklist-item';
+
+            const text = document.createElement('span');
+            text.className = 'checklist-description';
+            const title = document.createElement('strong');
+            title.textContent = `${index + 1}. `;
+            text.append(title, document.createTextNode(description));
+
+            const options = document.createElement('div');
+            options.className = 'checklist-options';
+            ['Pass', 'Fail', 'N/A'].forEach((status, statusIndex) => {
+                const label = document.createElement('label');
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.name = `checkpoint_${index + 1}`;
+                input.value = status;
+                input.required = statusIndex === 0;
+                label.append(input, document.createTextNode(status));
+                options.appendChild(label);
+            });
+
+            row.append(text, options);
+            checklistContainer.appendChild(row);
+        });
+    }
+
+    operationSelect.addEventListener('change', renderInspectionChecklist);
+    renderInspectionChecklist();
+</script>
+{% endblock %}

@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    h2 { border-bottom-color: var(--plan-blue); }
+    .grid-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    .stats-box {
+        background: #f9f9f9;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        border-left: 5px solid var(--do-teal);
+    }
+    .stats-box h4 {
+        margin-top: 0;
+        color: var(--plan-blue);
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+    }
+    .metric-source { margin-bottom: 12px; }
+    .metric-source label { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }
+    .calculated-field { background: #eef4f8; font-weight: 700; }
+    .metrics-status { min-height: 1.4em; color: #586574; }
+</style>
+
+
+<h2>OSHA Monthly HSE Statistics Report (Form 300A Equivalent)</h2>
+<p style="color: #666; margin-bottom: 20px;">Enter the aggregate statistics for the reporting month to calculate exposure hours and recordable incident rates.</p>
+
+<form action="/submit_monthly_stats" method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="section-header">1. Establishment & Period Information</div>
+    
+    <div class="grid-container">
+        <div class="form-group">
+            <label for="contractor_id">Contractor / Sub-Contractor:</label>
+            <select name="contractor_id" id="contractor_id" required>
+                <option value="">-- Select Contractor --</option>
+                {% for contractor in contractors %}
+                    <option value="{{ contractor.contractor_id }}">
+                        {{ contractor.company_name }} ({{ contractor.contractor_type }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="report_month">Reporting Month & Year:</label>
+            <input type="month" name="report_month" id="report_month" required>
+        </div>
+    </div>
+
+    <div class="section-header">2. Employment & Exposure Information</div>
+    
+    <div class="grid-container">
+        <div class="form-group">
+            <label for="avg_employees">Number of Employees:</label>
+            <input type="number" name="avg_employees" id="avg_employees" min="0" step="1" placeholder="e.g., 150" required>
+        </div>
+        <div class="form-group">
+            <label for="working_days">Number of Working Days in Reporting Period:</label>
+            <input type="number" name="working_days" id="working_days" min="0" step="1" placeholder="e.g., 22" required>
+        </div>
+        <div class="form-group">
+            <label for="daily_hours">Daily Working Hours per Employee:</label>
+            <input type="number" name="daily_hours" id="daily_hours" min="0" step="0.01" placeholder="e.g., 8" required>
+        </div>
+        <div class="form-group">
+            <label for="total_hours">Total Hours Worked (calculated):</label>
+            <input type="number" name="total_hours" id="total_hours" class="calculated-field" min="0" step="0.01" readonly required>
+            <small style="color: #666;">Employees × working days × daily hours. Adjust days/hours to reflect actual attendance and overtime; exclude leave.</small>
+        </div>
+        <div class="form-group">
+            <label for="safe_hours">Total Safe Hours:</label>
+            <input type="number" name="safe_hours" id="safe_hours" min="0" step="0.01" placeholder="Enter safe hours manually" required>
+            <small style="color: #666;">Enter the safe-hours figure for this reporting period.</small>
+        </div>
+    </div>
+
+    <div class="section-header">3. Number of Cases (OSHA Recordables)</div>
+    <div class="form-group metric-source">
+        <label for="recordables_mode"><strong>Recordable case counts:</strong></label>
+        <select name="recordables_mode" id="recordables_mode" class="metric-mode" data-fields="fatalities,days_away_cases,restricted_cases,other_recordables">
+            <option value="automatic" selected>Automatically count incident reports</option>
+            <option value="manual">Enter manually</option>
+        </select>
+    </div>
+    <p class="metrics-status" id="monthlyMetricsStatus" role="status" aria-live="polite"></p>
+    
+    <div class="grid-container">
+        <div class="stats-box" style="border-left-color: #d32f2f;">
+            <h4>(G) Fatalities</h4>
+            <label>Total number of deaths:</label>
+            <input type="number" name="fatalities" id="fatalities" value="0" min="0" step="1" required>
+        </div>
+        
+        <div class="stats-box" style="border-left-color: var(--check-orange);">
+            <h4>(H) Days Away From Work</h4>
+            <label>Cases with days away (LTI):</label>
+            <input type="number" name="days_away_cases" id="days_away_cases" value="0" min="0" step="1" required>
+        </div>
+
+        <div class="stats-box" style="border-left-color: var(--act-amber);">
+            <h4>(I) Job Transfer or Restriction</h4>
+            <label>Cases with restricted duty:</label>
+            <input type="number" name="restricted_cases" id="restricted_cases" value="0" min="0" step="1" required>
+        </div>
+
+        <div class="stats-box" style="border-left-color: var(--do-teal);">
+            <h4>(J) Other Recordable Cases</h4>
+            <label>Medical treatment cases (MTC):</label>
+            <input type="number" name="other_recordables" id="other_recordables" value="0" min="0" step="1" required>
+        </div>
+    </div>
+
+    <div class="section-header">4. Number of Days (Severity Metrics)</div>
+    
+    <div class="grid-container">
+        <div class="form-group">
+            <label for="days_away_total">(K) Total number of days away from work:</label>
+            <input type="number" name="days_away_total" id="days_away_total" value="0" min="0" required>
+        </div>
+        <div class="form-group">
+            <label for="days_restricted_total">(L) Total number of days of job transfer/restriction:</label>
+            <input type="number" name="days_restricted_total" id="days_restricted_total" value="0" min="0" required>
+        </div>
+    </div>
+
+    <div class="section-header">Calculated Safety Rates (per 200,000 hours worked)</div>
+    <div class="grid-container">
+        <div class="form-group"><label>TRIR / TCIR (Total Recordable Cases × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_trir" class="calculated-field" readonly></div>
+        <div class="form-group"><label>DART Rate (Days Away + Restricted/Transfer Cases × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_dart" class="calculated-field" readonly></div>
+        <div class="form-group"><label>DAFW Rate (Days Away Cases × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_dafw" class="calculated-field" readonly></div>
+        <div class="form-group"><label>LTIR (Lost Time Injuries × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_ltir" class="calculated-field" readonly></div>
+        <div class="form-group"><label>Severity Rate (Lost Workdays × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_severity" class="calculated-field" readonly></div>
+        <div class="form-group"><label>Fatality Rate (Fatalities × 200,000 ÷ Hours):</label>
+            <input type="text" id="rate_fatality" class="calculated-field" readonly></div>
+    </div>
+    <small style="color: #666;">Rates update automatically from the hours and case counts above and are saved on submission. Shows 0.00 when hours are zero.</small>
+
+    <div class="section-header">5. Leading Indicators (Proactive Safety)</div>
+    
+    <div class="grid-container">
+        <div class="form-group">
+            <label for="toolboxes_conducted">Toolbox Talks / Safety Meetings Conducted:</label>
+            <input type="number" name="toolboxes_conducted" id="toolboxes_conducted" value="0" min="0" step="1" required>
+        </div>
+        <div class="form-group">
+            <label for="near_misses_mode">Near misses:</label>
+            <select name="near_misses_mode" id="near_misses_mode" class="metric-mode" data-fields="near_misses">
+                <option value="automatic" selected>Automatically count incident reports</option>
+                <option value="manual">Enter manually</option>
+            </select>
+            <input type="number" name="near_misses" id="near_misses" value="0" min="0" step="1" required>
+        </div>
+        <div class="form-group">
+            <label for="observations_mode">Safety observations:</label>
+            <select name="observations_mode" id="observations_mode" class="metric-mode" data-fields="observations_recorded">
+                <option value="automatic" selected>Automatically count submitted observations</option>
+                <option value="manual">Enter manually</option>
+            </select>
+            <input type="number" name="observations_recorded" id="observations_recorded" value="0" min="0" step="1" required>
+        </div>
+        <div class="form-group">
+            <label for="inspections_mode">HSE inspections performed:</label>
+            <select name="inspections_mode" id="inspections_mode" class="metric-mode" data-fields="inspections_performed">
+                <option value="automatic" selected>Automatically count submitted inspections</option>
+                <option value="manual">Enter manually</option>
+            </select>
+            <input type="number" name="inspections_performed" id="inspections_performed" value="0" min="0" step="1" required>
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-top: 20px;">
+        <label for="executive_summary">Monthly Executive Summary / Comments:</label>
+        <textarea name="executive_summary" rows="3" placeholder="Brief summary of HSE performance, major milestones, or areas of concern..."></textarea>
+    </div>
+
+    <button type="submit" style="background-color: var(--plan-blue); margin-top: 15px; width: 100%;">Submit Monthly Statistics</button>
+</form>
+<script>
+    const monthlyMetricsUrl = {{ url_for('monthly_stats_metrics')|tojson }};
+    const monthlyContractor = document.getElementById('contractor_id');
+    const monthlyReportMonth = document.getElementById('report_month');
+    const monthlyMetricsStatus = document.getElementById('monthlyMetricsStatus');
+    const totalHoursOutput = document.getElementById('total_hours');
+    let loadedMonthlyMetrics = null;
+
+    function updateCalculatedHours() {
+        const employees = Number(document.getElementById('avg_employees').value);
+        const days = Number(document.getElementById('working_days').value);
+        const dailyHours = Number(document.getElementById('daily_hours').value);
+        totalHoursOutput.value = [employees, days, dailyHours].every(Number.isFinite)
+            ? (employees * days * dailyHours).toFixed(2)
+            : '';
+        updateSafetyRates();
+    }
+
+    function updateSafetyRates() {
+        const num = id => Number(document.getElementById(id).value) || 0;
+        const hours = Number(totalHoursOutput.value) || 0;
+        const rate = count => hours > 0 ? (count * 200000 / hours).toFixed(2) : '0.00';
+        const daysAway = num('days_away_cases');
+        const restricted = num('restricted_cases');
+        const fatalities = num('fatalities');
+        const set = (id, value) => { document.getElementById(id).value = value; };
+        set('rate_trir', rate(fatalities + daysAway + restricted + num('other_recordables')));
+        set('rate_dart', rate(daysAway + restricted));
+        set('rate_dafw', rate(daysAway));
+        set('rate_ltir', rate(daysAway));
+        set('rate_severity', rate(num('days_away_total')));
+        set('rate_fatality', rate(fatalities));
+    }
+
+    function updateMetricMode(modeSelect) {
+        const automatic = modeSelect.value === 'automatic';
+        modeSelect.dataset.fields.split(',').forEach(fieldName => {
+            const field = document.getElementById(fieldName);
+            field.readOnly = automatic;
+            field.classList.toggle('calculated-field', automatic);
+            if (automatic && loadedMonthlyMetrics) {
+                field.value = loadedMonthlyMetrics[fieldName] ?? 0;
+            }
+        });
+        updateSafetyRates();
+    }
+
+    async function loadMonthlyMetrics() {
+        loadedMonthlyMetrics = null;
+        if (!monthlyContractor.value || !monthlyReportMonth.value) {
+            monthlyMetricsStatus.textContent = 'Select a contractor and reporting month to load automatic counts.';
+            return;
+        }
+        monthlyMetricsStatus.textContent = 'Loading counts from submitted reports…';
+        const query = new URLSearchParams({
+            contractor_id: monthlyContractor.value,
+            report_month: monthlyReportMonth.value
+        });
+        try {
+            const response = await fetch(`${monthlyMetricsUrl}?${query.toString()}`);
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.description || 'Could not load report counts.');
+            }
+            loadedMonthlyMetrics = payload;
+            document.querySelectorAll('.metric-mode').forEach(updateMetricMode);
+            monthlyMetricsStatus.textContent =
+                'Automatic counts use records submitted for this contractor and reporting month. Verify before submission.';
+        } catch (error) {
+            monthlyMetricsStatus.textContent = error.message || 'Could not load report counts.';
+            monthlyMetricsStatus.style.color = '#b42318';
+        }
+    }
+
+    ['avg_employees', 'working_days', 'daily_hours'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateCalculatedHours);
+    });
+    monthlyContractor.addEventListener('change', loadMonthlyMetrics);
+    monthlyReportMonth.addEventListener('change', loadMonthlyMetrics);
+    document.querySelectorAll('.metric-mode').forEach(mode => {
+        mode.addEventListener('change', () => updateMetricMode(mode));
+    });
+    ['fatalities', 'days_away_cases', 'restricted_cases', 'other_recordables',
+     'days_away_total', 'days_restricted_total'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateSafetyRates);
+    });
+    updateCalculatedHours();
+</script>
+{% endblock %}

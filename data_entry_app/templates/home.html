@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="welcome">
+    <p class="eyebrow">SAFETY. ACCOUNTABILITY. VISIBILITY.</p>
+    <h1>HSE Management System</h1>
+    <p class="welcome-copy">A secure workspace for project safety reporting, incident management, and organization-level HSE dashboards.</p>
+    <div class="welcome-actions">
+        <a class="btn" href="{{ url_for('register_organization') }}">Register your organization</a>
+        <a class="welcome-secondary" href="{{ url_for('admin_login') }}">Administrator sign in</a>
+    </div>
+    <div class="welcome-note">Organization workspaces are private. Administrator access is activated after work email verification.</div>
+</section>
+<style>
+    .welcome { max-width: 780px; margin: 4rem auto; text-align: center; padding: 2rem; }
+    .welcome h1 { color: var(--plan-blue); font-size: clamp(2rem, 5vw, 3.2rem); margin: .4rem 0 1rem; }
+    .welcome-copy { max-width: 650px; margin: 0 auto 2rem; color: #596579; font-size: 1.15rem; line-height: 1.65; }
+    .eyebrow { color: var(--do-teal); font-weight: 700; letter-spacing: .12em; font-size: .78rem; }
+    .welcome-actions { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    .welcome-secondary { color: var(--plan-blue); font-weight: 600; }
+    .welcome-note { max-width: 520px; margin: 3rem auto 0; padding: 14px; background: var(--bg-light); border-radius: 6px; color: #586574; }
+</style>
+{% endblock %}

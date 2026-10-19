@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="registration">
+    <p class="eyebrow">HSE MANAGEMENT SYSTEM</p>
+    <h2>Register your organization</h2>
+    <p class="text-muted">Create a private organization workspace. Your administrator account activates after verifying the work email address.</p>
+
+    {% if not registration_enabled %}
+        <div class="registration-errors" role="alert">
+            Email verification is not configured yet. Registration is temporarily unavailable; please contact the service administrator.
+        </div>
+    {% endif %}
+
+    {% if errors %}
+        <div class="registration-errors" role="alert">
+            <strong>We couldn't complete registration:</strong>
+            <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('register_organization') }}" autocomplete="on">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <div class="section-header">Organization details</div>
+        <div class="registration-grid">
+            <div class="form-group">
+                <label for="organization_name">Organization name *</label>
+                <input type="text" id="organization_name" name="organization_name" maxlength="160" autocomplete="organization" value="{{ form.organization_name if form else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="organization_type">Organization type *</label>
+                <select id="organization_type" name="organization_type" required>
+                    <option value="">Select type</option>
+                    {% for value in ['Company', 'Contractor', 'Client', 'Other'] %}
+                        <option value="{{ value }}" {% if form and form.organization_type == value %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="industry">Industry *</label>
+                <select id="industry" name="industry" required>
+                    <option value="">Select industry</option>
+                    {% for value in ['Oil & Gas', 'Construction', 'Manufacturing', 'Other'] %}
+                        <option value="{{ value }}" {% if form and form.industry == value %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="website">Organization website</label>
+                <input type="url" id="website" name="website" maxlength="300" placeholder="https://example.com" autocomplete="url" value="{{ form.website if form else '' }}">
+            </div>
+        </div>
+
+        <div class="section-header">Project details</div>
+        <div class="registration-grid">
+            <div class="form-group">
+                <label for="project_name">Project name *</label>
+                <input type="text" id="project_name" name="project_name" maxlength="160" value="{{ form.project_name if form else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="project_type">Project type *</label>
+                <input type="text" id="project_type" name="project_type" maxlength="120" placeholder="e.g., refinery upgrade, plant expansion" value="{{ form.project_type if form else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="project_location">Project location *</label>
+                <input type="text" id="project_location" name="project_location" maxlength="200" placeholder="City, region, country" value="{{ form.project_location if form else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="project_start_date">Project start date</label>
+                <input type="date" id="project_start_date" name="project_start_date" value="{{ form.project_start_date if form else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="project_end_date">Expected completion date</label>
+                <input type="date" id="project_end_date" name="project_end_date" value="{{ form.project_end_date if form else '' }}">
+            </div>
+        </div>
+
+        <div class="section-header">Administrator account</div>
+        <div class="registration-grid">
+            <div class="form-group">
+                <label for="full_name">Administrator full name *</label>
+                <input type="text" id="full_name" name="full_name" maxlength="120" autocomplete="name" value="{{ form.full_name if form else '' }}" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Work email *</label>
+                <input type="email" id="email" name="email" maxlength="254" autocomplete="email" value="{{ form.email if form else '' }}" required>
+                <small>A verification link will be sent to this address.</small>
+            </div>
+            <div class="form-group">
+                <label for="password">Password *</label>
+                <input type="password" id="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+                <small>Use at least 12 characters. Avoid reusing a password from another service.</small>
+            </div>
+            <div class="form-group">
+                <label for="password_confirm">Confirm password *</label>
+                <input type="password" id="password_confirm" name="password_confirm" minlength="12" maxlength="128" autocomplete="new-password" required>
+            </div>
+        </div>
+        <button type="submit" {% if not registration_enabled %}disabled{% endif %}>Create Organization Workspace</button>
+        <a class="secondary-link" href="{{ url_for('admin_login') }}">Already registered? Sign in</a>
+    </form>
+</section>
+
+<style>
+    .registration { max-width: 1000px; margin: 1rem auto; }
+    .registration h2 { margin-top: .25rem; }
+    .eyebrow { color: var(--do-teal); font-weight: 700; letter-spacing: .12em; font-size: .78rem; }
+    .registration-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 20px; }
+    .registration small { display: block; color: #596579; margin-top: .4rem; }
+    .registration-errors { padding: 12px 18px; margin: 16px 0; color: #8a1c1c; background: #fee2e2; border-radius: 5px; }
+    .secondary-link { margin-left: 14px; color: var(--plan-blue); }
+</style>
+{% endblock %}

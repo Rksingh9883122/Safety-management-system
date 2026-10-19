@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Activate subcontractor account{% endblock %}
+
+{% block content %}
+<h2>Activate Your Subcontractor Account</h2>
+<p class="text-muted">Choose a password to activate your organization-scoped access. This invitation link can only be used once.</p>
+{% if error %}
+    <div class="notice notice-error" role="alert">{{ error }}</div>
+{% endif %}
+<form method="post" action="{{ url_for('activate_account', token=token) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+    <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required>
+    </div>
+    <div class="form-group">
+        <label for="password_confirm">Confirm password</label>
+        <input type="password" id="password_confirm" name="password_confirm" minlength="12" maxlength="128" autocomplete="new-password" required>
+    </div>
+    <button type="submit">Activate Account</button>
+</form>
+{% endblock %}

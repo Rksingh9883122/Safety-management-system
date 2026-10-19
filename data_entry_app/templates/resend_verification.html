@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-panel">
+    <p class="eyebrow">EMAIL VERIFICATION</p>
+    <h2>Resend verification email</h2>
+    <p>Enter the email used during registration. If it belongs to a pending account, we will send a fresh verification link.</p>
+    <form method="post" action="{{ url_for('resend_verification') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label for="email">Work email</label>
+            <input type="email" id="email" name="email" maxlength="254" required>
+        </div>
+        <button type="submit">Send Verification Email</button>
+    </form>
+</section>
+<style>
+    .auth-panel { max-width: 640px; margin: 2rem auto; padding: 2rem; border: 1px solid #dfe7ef; border-radius: 12px; }
+    .eyebrow { color: var(--do-teal); font-weight: 700; letter-spacing: .12em; font-size: .78rem; }
+</style>
+{% endblock %}

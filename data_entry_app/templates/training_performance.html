@@ -1,0 +1,2170 @@
+{% extends "base.html" %}
+
+{% block title %}Training Performance & Matrix Tracker{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Modal Popup Layer Styling */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    .modal-box {
+        background: white;
+        padding: 2rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 450px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    }
+    .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 1.5rem;
+    }
+    .btn-secondary {
+        background-color: #78909c;
+    }
+    .btn-secondary:hover {
+        background-color: #546e7a;
+    }
+    .badge-industry {
+        font-size: 9px;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-weight: bold;
+        color: white;
+        display: inline-block;
+        margin-top: 2px;
+    }
+    /* Industry-specific Color Enums Mapped into Layout */
+    .ind-construction { background-color: #e65100; }
+    .ind-manufacturing { background-color: #37474f; }
+    .ind-oilgas { background-color: #006064; }
+
+    /* Scheduled Training */
+.calendar-event.scheduled-event {
+    background: #fff3e0;
+    border-left: 4px solid #f57c00;
+    color: #333;
+    padding: 6px;
+    margin-top: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.calendar-event.scheduled-event:hover {
+    background: #ffe0b2;
+    transform: translateY(-1px);
+}
+
+
+/* Completed Training */
+.calendar-event.completed-event {
+    background: #e8f5e9;
+    border-left: 4px solid #2e7d32;
+    color: #1b5e20;
+    padding: 6px;
+    margin-top: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.calendar-event.completed-event:hover {
+    background: #c8e6c9;
+}
+
+
+/* Course Name */
+.calendar-course {
+    font-weight: 700;
+    font-size: 11px;
+}
+
+
+/* Team Name */
+.calendar-team {
+    font-size: 10px;
+    margin-top: 2px;
+    opacity: 0.8;
+}
+
+
+/* Status */
+.calendar-status {
+    font-size: 9px;
+    font-weight: bold;
+    margin-top: 4px;
+}
+
+
+/* Completed status */
+.completed-event .calendar-status {
+    color: #2e7d32;
+}
+
+
+/* Scheduled status */
+.scheduled-event .calendar-status {
+    color: #ef6c00;
+}
+
+.performance-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 1rem 0;
+}
+.performance-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    align-items: end;
+}
+.performance-form-grid .form-group {
+    margin-bottom: 0;
+}
+.performance-form-grid input,
+.performance-form-grid select {
+    width: 100%;
+}
+.performance-table-wrap {
+    overflow-x: auto;
+}
+.performance-table-wrap table {
+    min-width: 900px;
+}
+.performance-empty {
+    padding: 1.25rem;
+    text-align: center;
+    color: #666;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Module Internal Switcher Tabs Grid Menu Layout -->
+<div class="tabs">
+    <button type="button" class="tab-btn active" data-tab="performance" onclick="switchTab('performance', this)">Performance Tracker</button>
+    <button type="button" class="tab-btn" data-tab="matrix" onclick="switchTab('matrix', this)">Training Matrix</button>
+    <button type="button" class="tab-btn" data-tab="calendar" onclick="switchTab('calendar', this)">Monthly Calendar</button>
+    <button type="button" class="tab-btn" data-tab="upload" onclick="switchTab('upload', this)">Upload Records</button>
+</div>
+<input type="file" id="performanceWorkbookInput" accept=".xlsx,.xls" style="display:none;" onchange="importPerformanceWorkbook(event)">
+
+<!-- TAB 1: Core Metrics Overview Panel Tracker Container -->
+<div id="performance" class="tab-content active">
+    <h2>Training Matrix Performance Analytics</h2>
+    <p class="text-muted">Track employee training completion and hours. The workbook contains only employee and training selection fields; each uploaded workbook row represents a completed training. Set durations in the Training Hours sheet. Keep Record IDs to update existing rows; omitted records are retained.</p>
+    
+    <div class="grid-3">
+        <div class="card">
+            <h3>Overall Compliance Rate</h3>
+            <div class="stat" id="performanceCompliance">0%</div>
+        </div>
+        <div class="card">
+            <h3>Total Active Hours Trained</h3>
+            <div class="stat" id="performanceHours">0 hrs</div>
+        </div>
+        <div class="card">
+            <h3>Pending Training Programs</h3>
+            <div class="stat" id="performancePending" style="color: var(--check-orange);">0</div>
+        </div>
+    </div>
+
+    <div class="performance-actions">
+        <button type="button" class="btn" onclick="downloadPerformanceWorkbook()">Download Excel Workbook</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('performanceWorkbookInput').click()">Upload Updated Workbook</button>
+    </div>
+    <div id="performanceWorkbookStatus" role="status" aria-live="polite" style="margin-bottom:1rem;"></div>
+
+    <div class="section-header">Add or Update Employee Training</div>
+    <form id="performanceRecordForm" onsubmit="savePerformanceRecord(event)">
+        <input type="hidden" id="performanceRecordId">
+        <div class="performance-form-grid">
+            <div class="form-group">
+                <label for="performanceVertical">Vertical</label>
+                <select id="performanceVertical" required onchange="updatePerformanceFormDepartments()"></select>
+            </div>
+            <div class="form-group">
+                <label for="performanceDepartment">Department</label>
+                <select id="performanceDepartment" required onchange="updatePerformanceFormRoles()"></select>
+            </div>
+            <div class="form-group">
+                <label for="performanceRole">Personnel Workgroup / Role</label>
+                <select id="performanceRole" required onchange="updatePerformanceFormModules()"></select>
+            </div>
+            <div class="form-group">
+                <label for="performanceModule">Training Module</label>
+                <select id="performanceModule" required></select>
+            </div>
+            <div class="form-group">
+                <label for="performanceEmployee">Employee Name</label>
+                <input type="text" id="performanceEmployee" required maxlength="120">
+            </div>
+            <div class="form-group">
+                <label for="performanceStatus">Training Status</label>
+                <select id="performanceStatus" required>
+                    <option value="Not Started">Not Started</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="performanceCompletionDate">Completion Date</label>
+                <input type="date" id="performanceCompletionDate">
+            </div>
+            <div class="form-group" style="display:flex; gap:8px;">
+                <button type="submit" class="btn" id="performanceSaveButton">Save Training Record</button>
+                <button type="button" class="btn btn-secondary" onclick="resetPerformanceForm()">Clear</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="section-header">Recent Performance Tracking Log</div>
+    <div class="performance-table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Vertical</th>
+                    <th>Department</th>
+                    <th>Personnel Workgroup / Role</th>
+                    <th>Training Module</th>
+                    <th>Employee Name</th>
+                    <th>Status</th>
+                    <th>Completion Date</th>
+                    <th>Training Hours</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="performanceRecordsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- TAB 2: Skills Training Gap Requirement Matrix Table -->
+<div id="matrix" class="tab-content">
+    <h2>Operational Core Competency Matrix</h2>
+    <p class="text-muted">Map personnel compliance items across functional divisions to dispatch schedules instantly.</p>
+
+    <div class="panel-controls" style="display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap;">
+        <label for="matrixVertical" style="font-weight:600;">Vertical:</label>
+        <select id="matrixVertical" onchange="updateDepartmentDropdown(); renderDynamicMatrix();">
+            <option value="construction">Construction Site</option>
+            <option value="manufacturing">Manufacturing Plant</option>
+            <option value="oilgas">Oil &amp; Gas / EPC Project Site</option>
+        </select>
+
+        <label for="matrixDept" style="font-weight:600;">Department:</label>
+        <select id="matrixDept" onchange="renderDynamicMatrix();"></select>
+    </div>
+
+    <div style="overflow-x:auto;">
+        <table>
+            <thead id="matrixHeader"></thead>
+            <tbody id="matrixBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- TAB 3: Pipeline Calendar Scheduling Workspace -->
+<div id="calendar" class="tab-content">
+    <h2>Monthly Training Compliance Calendar</h2>
+    <p class="text-muted">Orchestrate layout deadlines mapped from organizational core competency gaps. Maximum 3 sessions allowed per calendar cell day.</p>
+    
+    <div class="calendar-controls">
+        <label for="month-select"><strong>Viewing Target Calendar:</strong></label>
+        <select id="month-select" onchange="renderCalendar()">
+            <option value="October">October 2026</option>
+            <option value="November">November 2026</option>
+        </select>
+        <button class="btn" style="margin-left:auto;" onclick="openSchedulingModal(null)">+ Quick Plan Training</button>
+    </div>
+
+    <div class="calendar-grid">
+        <div class="calendar-day-head">Sun</div>
+        <div class="calendar-day-head">Mon</div>
+        <div class="calendar-day-head">Tue</div>
+        <div class="calendar-day-head">Wed</div>
+        <div class="calendar-day-head">Thu</div>
+        <div class="calendar-day-head">Fri</div>
+        <div class="calendar-day-head">Sat</div>
+    </div>
+    <div class="calendar-grid" id="calendarDays"></div>
+</div>
+
+<!-- TAB 4: Spreadsheet Upload Import Section Workspace -->
+<div id="upload" class="tab-content">
+    <h2>Import Training Compliance Sheets</h2>
+    <p class="text-muted">Import the Training Records and optional Training Hours worksheets from the downloaded Excel workbook.</p>
+    
+    <div style="max-width: 600px; margin: 0 auto;">
+        <div class="upload-zone" onclick="document.getElementById('performanceWorkbookInput').click()">
+            <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
+            <p><strong>Select an Excel workbook to import training records</strong></p>
+            <span style="font-size: 12px; color: #666;">Accepted formats: .xlsx, .xls</span>
+        </div>
+        <div id="uploadStatus" role="status" aria-live="polite" style="margin-top: 16px; text-align: center; font-weight: 600;"></div>
+    </div>
+</div>
+
+<!-- INDUSTRY TRAINING SCHEDULER / MODIFIER MODAL CONFIGURATION WINDOW -->
+<div class="modal-overlay" id="schedulerModal">
+    <div class="modal-box">
+        <h3 id="modalTitle">Plan Training Session</h3>
+        <!-- Hidden input tracking node to target records during updates -->
+        <input type="hidden" id="editingEventId" value="">
+        
+        <div class="form-group" style="margin-top:1rem;">
+            <label for="modalDay">Target Day of Month (1-31):</label>
+            <input type="text" id="modalDay" placeholder="e.g. 15">
+        </div>
+        <div class="form-group">
+            <label for="industrySelect">Sector / Vertical Track:</label>
+            <select id="industrySelect" onchange="updatePlanningDropdowns()">
+                <option value="construction">Construction Sector</option>
+                <option value="manufacturing">Manufacturing Operations</option>
+                <option value="oilgas">Oil & Gas Extraction</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="divisionSelect">Division / Personnel Workgroup:</label>
+            <select id="divisionSelect" onchange="updatePlanningDropdowns()"></select>
+        </div>
+        <div class="form-group">
+            <label for="courseSelect">Available Training Module:</label>
+            <select id="courseSelect"></select>
+        </div>
+        <div class="form-group">
+            <label for="targetGroup">Workgroup / Role:</label>
+            <select id="targetGroup" onchange="updateTrainingDropdowns()"></select>
+        </div>
+        <div class="modal-actions">
+            <!-- Dynamic context-aware interaction triggers -->
+            <button id="deleteEventBtn" class="btn btn-danger-toggle" style="margin-right: auto; display: none;" onclick="deletePlannedTraining()">Remove</button>
+            <button id="toggleCompleteBtn" class="btn btn-success-toggle" style="display: none;" onclick="toggleStatusPlannedTraining()">Mark Completed</button>
+            <button class="btn btn-secondary" onclick="closeSchedulingModal()">Cancel</button>
+            <button id="saveEventBtn" class="btn" onclick="savePlannedTraining()">Confirm Schedule</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script>
+    // Tab Switching Configuration Router Panel
+    function switchTab(tabId, triggeringButton = null) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        const activeTab = document.getElementById(tabId);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+        const activeButton = triggeringButton ||
+            document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+        if (tabId === 'calendar') { renderCalendar(); }
+        if (tabId === 'matrix') {
+            updateDepartmentDropdown();
+            renderDynamicMatrix();
+        }
+    }
+
+    // Static Course Maps Matrix Course Item Enums Definitions
+    const industryCourses = {
+        construction: [
+            "Site Safety Induction",
+            "Scaffolding Awareness",
+            "Excavation Hazard Control",
+            "Working at Heights Safety",
+            "Heavy Equipment Operations"
+        ],
+        manufacturing: [
+            "Lockout / Tagout (LOTO)",
+            "Machine Guarding Protocols",
+            "Hazardous Chemical Handling",
+            "Forklift Fleet Competency"
+        ],
+        oilgas: [
+            "Hydrogen Sulfide (H2S) Alive",
+            "Confined Space Entry Permit",
+            "Blowout Preventer (BOP) Drill",
+            "Offshore Survival Safety (BOSIET)"
+        ]
+    };
+
+// ============================================================
+// TRAINING MATRIX MASTER DATA
+// M = Mandatory
+// R = Role Specific
+// RB = Risk Based
+// ER = Emergency Role
+// NA = Not Applicable
+// ============================================================
+
+const commonTraining = [
+    "HSE / Site Safety Induction",
+    "Emergency Response & Evacuation",
+    "Fire Safety & Extinguisher Awareness",
+    "First Aid Awareness",
+    "Incident & Near-Miss Reporting",
+    "Environmental Awareness"
+];
+
+const trainingMatrix = {
+
+    // ========================================================
+    // OIL & GAS / EPC PROJECT SITE
+    // ========================================================
+
+    oilgas: {
+
+        name: "Oil & Gas / EPC Project Site",
+
+        departments: {
+
+            "Project Management": {
+
+                "Project Manager": [
+                    "HSE Leadership",
+                    "Emergency Response & Evacuation",
+                    "Emergency Command & Control",
+                    "Permit to Work Awareness",
+                    "Incident Management",
+                    "Incident & Near-Miss Reporting",
+                    "Process Safety Management Awareness",
+                    "Environmental Awareness"
+                ],
+
+                "Construction Manager": [
+                    "HSE Leadership",
+                    "Emergency Response & Evacuation",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Lifting Awareness",
+                    "Excavation Safety",
+                    "Working at Heights Safety",
+                    "Incident Management",
+                    "Environmental Awareness"
+                ]
+            },
+
+            "Construction": {
+
+                "Site Engineer": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Working at Heights Safety",
+                    "Excavation Safety",
+                    "Lifting Awareness",
+                    "SIMOPS Awareness"
+                ],
+
+                "Construction Supervisor": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Working at Heights Safety",
+                    "Excavation Safety",
+                    "Lifting Awareness",
+                    "SIMOPS Awareness"
+                ]
+            },
+
+            "HSE": {
+
+                "HSE Manager": [
+                    "HSE Leadership",
+                    "Emergency Response & Evacuation",
+                    "Emergency Response Team Training",
+                    "Incident Investigation",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "First Aid Awareness",
+                    "Fire Safety & Extinguisher Awareness",
+                    "Environmental Awareness"
+                ],
+
+                "HSE Engineer": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Incident Investigation",
+                    "Working at Heights Safety",
+                    "Confined Space Entry",
+                    "Lifting Awareness",
+                    "First Aid Awareness",
+                    "Emergency Response & Evacuation",
+                    "Fire Safety & Extinguisher Awareness"
+                ],
+
+                "HSE Officer": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Incident Investigation",
+                    "Working at Heights Safety",
+                    "Confined Space Entry",
+                    "Excavation Safety",
+                    "Lifting Awareness",
+                    "First Aid Awareness",
+                    "Emergency Response & Evacuation",
+                    "Fire Safety & Extinguisher Awareness"
+                ]
+            },
+
+            "Civil": {
+
+                "Civil Engineer": [
+                    "Excavation Safety",
+                    "Working at Heights Safety",
+                    "Scaffolding Awareness",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Civil Supervisor": [
+                    "Excavation Safety",
+                    "Working at Heights Safety",
+                    "Scaffolding Awareness",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness"
+                ]
+            },
+
+            "Mechanical": {
+
+                "Mechanical Engineer": [
+                    "LOTO / Energy Isolation",
+                    "Lifting Awareness",
+                    "Permit to Work",
+                    "Hot Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Pressure Testing Safety",
+                    "Line Breaking"
+                ],
+
+                "Mechanical Supervisor": [
+                    "LOTO / Energy Isolation",
+                    "Lifting Awareness",
+                    "Permit to Work",
+                    "Hot Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Pressure Testing Safety",
+                    "Line Breaking"
+                ]
+            },
+
+            "Piping": {
+
+                "Piping Engineer": [
+                    "Permit to Work",
+                    "Hot Work",
+                    "Lifting Awareness",
+                    "Working at Heights Safety",
+                    "Risk Assessment / JSA Awareness",
+                    "Line Breaking",
+                    "Pressure Testing Safety"
+                ],
+
+                "Piping Supervisor": [
+                    "Permit to Work",
+                    "Hot Work",
+                    "Lifting Awareness",
+                    "Working at Heights Safety",
+                    "Risk Assessment / JSA Awareness",
+                    "Line Breaking"
+                ]
+            },
+
+            "Electrical": {
+
+                "Electrical Engineer": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation",
+                    "Permit to Work",
+                    "Arc Flash Awareness",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Electrician": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation",
+                    "Permit to Work",
+                    "Arc Flash Awareness"
+                ]
+            },
+
+            "Instrumentation": {
+
+                "Instrument Engineer": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation",
+                    "Permit to Work"
+                ],
+
+                "Instrument Technician": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation",
+                    "Permit to Work"
+                ]
+            },
+
+            "Lifting": {
+
+                "Lifting Supervisor": [
+                    "Lifting Operations",
+                    "Lift Planning",
+                    "Rigging Safety",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Rigger": [
+                    "Rigging & Slinging",
+                    "Lifting Safety"
+                ],
+
+                "Banksman / Signalman": [
+                    "Banksman / Signalman",
+                    "Rigging & Slinging",
+                    "Lifting Safety"
+                ]
+            },
+
+            "Crane Operations": {
+
+                "Crane Operator": [
+                    "Crane Competency",
+                    "Lifting Safety",
+                    "Pre-Use Equipment Inspection"
+                ]
+            },
+
+            "Scaffolding": {
+
+                "Scaffold Supervisor": [
+                    "Scaffold Inspector Competency",
+                    "Working at Heights Safety",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Scaffold Inspector": [
+                    "Scaffold Inspector Competency",
+                    "Working at Heights Safety"
+                ],
+
+                "Scaffolder": [
+                    "Scaffolding Safety",
+                    "Working at Heights Safety"
+                ]
+            },
+
+            "Welding": {
+
+                "Welder": [
+                    "Hot Work",
+                    "Fire Safety & Extinguisher Awareness",
+                    "PPE Awareness"
+                ],
+
+                "Gas Cutter": [
+                    "Hot Work",
+                    "Fire Safety & Extinguisher Awareness",
+                    "Compressed Gas Cylinder Safety",
+                    "PPE Awareness"
+                ]
+            },
+
+            "Confined Space": {
+
+                "Entrant": [
+                    "Confined Space Entry"
+                ],
+
+                "Attendant": [
+                    "Confined Space Attendant"
+                ],
+
+                "Entry Supervisor": [
+                    "Confined Space Supervisor",
+                    "Permit to Work",
+                    "Gas Testing Awareness"
+                ]
+            },
+
+            "Operations": {
+
+                "Operator": [
+                    "Permit to Work",
+                    "LOTO / Energy Isolation",
+                    "Process Safety Management Awareness",
+                    "Hydrocarbon Hazard Awareness",
+                    "Emergency Response & Evacuation"
+                ],
+
+                "Technician": [
+                    "Permit to Work",
+                    "LOTO / Energy Isolation",
+                    "Process Safety Management Awareness",
+                    "Hydrocarbon Hazard Awareness"
+                ]
+            },
+
+            "Commissioning": {
+
+                "Commissioning Engineer": [
+                    "LOTO / Energy Isolation",
+                    "Permit to Work",
+                    "Process Safety Management Awareness",
+                    "SIMOPS Awareness",
+                    "Pressure Testing Safety",
+                    "Emergency Shutdown Awareness"
+                ]
+            },
+
+            "Logistics": {
+
+                "Driver": [
+                    "Defensive Driving",
+                    "Journey Management",
+                    "Basic First Aid / Emergency Response"
+                ]
+            },
+
+            "Warehouse": {
+
+                "Storekeeper": [
+                    "Manual Handling / Ergonomics",
+                    "Chemical / SDS Awareness",
+                    "Fire Safety & Extinguisher Awareness"
+                ]
+            }
+        }
+    },
+
+
+    // ========================================================
+    // CONSTRUCTION SITE
+    // ========================================================
+
+    construction: {
+
+        name: "Construction Site",
+
+        departments: {
+
+            "Project": {
+
+                "Project Manager": [
+                    "HSE Leadership",
+                    "Emergency Response & Evacuation",
+                    "Incident Management",
+                    "Permit to Work Awareness"
+                ]
+            },
+
+            "Construction": {
+
+                "Construction Manager": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Working at Heights Safety",
+                    "Lifting Awareness",
+                    "Excavation Safety",
+                    "Emergency Response & Evacuation"
+                ]
+            },
+
+            "Civil": {
+
+                "Civil Engineer": [
+                    "Excavation Safety",
+                    "Working at Heights Safety",
+                    "Scaffolding Awareness",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Civil Supervisor / Foreman": [
+                    "Excavation Safety",
+                    "Risk Assessment / JSA Awareness",
+                    "Permit to Work",
+                    "Working at Heights Safety"
+                ]
+            },
+
+            "HSE": {
+
+                "HSE Manager": [
+                    "Emergency Response & Evacuation",
+                    "Incident Investigation",
+                    "First Aid Awareness",
+                    "Fire Safety & Extinguisher Awareness"
+                ],
+
+                "HSE Officer": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Working at Heights Safety",
+                    "Excavation Safety",
+                    "Confined Space Entry",
+                    "First Aid Awareness",
+                    "Emergency Response & Evacuation"
+                ]
+            },
+
+            "Excavation": {
+
+                "Excavation Supervisor": [
+                    "Excavation Safety / Competent Person",
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness"
+                ]
+            },
+
+            "Scaffolding": {
+
+                "Scaffold Inspector": [
+                    "Scaffold Inspection",
+                    "Working at Heights Safety"
+                ],
+
+                "Scaffolder": [
+                    "Scaffolding Safety",
+                    "Working at Heights Safety"
+                ]
+            },
+
+            "Lifting": {
+
+                "Lifting Supervisor": [
+                    "Lift Planning",
+                    "Lifting Operations",
+                    "Risk Assessment / JSA Awareness"
+                ],
+
+                "Rigger": [
+                    "Rigging & Slinging"
+                ],
+
+                "Banksman": [
+                    "Banksman / Signalman"
+                ]
+            },
+
+            "Crane": {
+
+                "Crane Operator": [
+                    "Crane Operations",
+                    "Lifting Safety"
+                ]
+            },
+
+            "MEWP": {
+
+                "MEWP Operator": [
+                    "MEWP Operator Training",
+                    "Working at Heights Safety"
+                ]
+            },
+
+            "Electrical": {
+
+                "Electrician": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation"
+                ]
+            },
+
+            "Welding": {
+
+                "Welder": [
+                    "Hot Work",
+                    "Fire Safety & Extinguisher Awareness",
+                    "PPE Awareness"
+                ]
+            },
+
+            "Equipment": {
+
+                "Excavator Operator": [
+                    "Equipment Competency",
+                    "Excavation Safety"
+                ],
+
+                "Forklift Operator": [
+                    "Forklift Competency"
+                ]
+            },
+
+            "General Workforce": {
+
+                "Worker": [
+                    "HSE / Site Safety Induction",
+                    "PPE Awareness",
+                    "Emergency Response & Evacuation",
+                    "Toolbox Talk Awareness",
+                    "Manual Handling / Ergonomics",
+                    "Incident & Near-Miss Reporting"
+                ]
+            }
+        }
+    },
+
+
+    // ========================================================
+    // MANUFACTURING PLANT
+    // ========================================================
+
+    manufacturing: {
+
+        name: "Manufacturing Plant",
+
+        departments: {
+
+            "Plant Management": {
+
+                "Plant Manager": [
+                    "HSE Leadership",
+                    "Emergency Management",
+                    "Process / Operational Safety",
+                    "Incident Management"
+                ]
+            },
+
+            "Production": {
+
+                "Production Manager": [
+                    "LOTO / Energy Isolation",
+                    "Machine Safety",
+                    "Emergency Response & Evacuation"
+                ],
+
+                "Shift Supervisor": [
+                    "LOTO / Energy Isolation",
+                    "Machine Guarding",
+                    "Risk Assessment / JSA Awareness",
+                    "Emergency Response & Evacuation"
+                ],
+
+                "Machine Operator": [
+                    "Machine Guarding",
+                    "LOTO Awareness",
+                    "PPE Awareness"
+                ]
+            },
+
+            "Maintenance": {
+
+                "Maintenance Manager": [
+                    "LOTO / Energy Isolation",
+                    "Electrical Safety",
+                    "Permit to Work"
+                ],
+
+                "Mechanical Technician": [
+                    "LOTO / Energy Isolation",
+                    "Machine Safety",
+                    "Hot Work"
+                ],
+
+                "Electrician": [
+                    "Electrical Safety",
+                    "LOTO / Energy Isolation",
+                    "Arc Flash Awareness"
+                ]
+            },
+
+            "HSE": {
+
+                "HSE Manager": [
+                    "Emergency Response & Evacuation",
+                    "Incident Investigation",
+                    "Fire Safety & Extinguisher Awareness",
+                    "HSE Leadership"
+                ],
+
+                "HSE Officer": [
+                    "First Aid Awareness",
+                    "Emergency Response & Evacuation",
+                    "Fire Safety & Extinguisher Awareness",
+                    "Risk Assessment / JSA Awareness"
+                ]
+            },
+
+            "Warehouse": {
+
+                "Warehouse Supervisor": [
+                    "Forklift Safety",
+                    "Manual Handling / Ergonomics",
+                    "Fire Safety & Extinguisher Awareness"
+                ],
+
+                "Forklift Operator": [
+                    "Forklift Competency",
+                    "Manual Handling / Ergonomics"
+                ]
+            },
+
+            "Chemical Storage": {
+
+                "Chemical Handler": [
+                    "Chemical Safety",
+                    "SDS Awareness",
+                    "Spill Response",
+                    "PPE Awareness"
+                ]
+            },
+
+            "Quality": {
+
+                "Quality Engineer": [
+                    "Laboratory / Chemical Safety"
+                ]
+            },
+
+            "Utilities": {
+
+                "Utility Operator": [
+                    "LOTO / Energy Isolation",
+                    "Chemical Safety",
+                    "Confined Space Entry"
+                ]
+            },
+
+            "Contractors": {
+
+                "Contractor Supervisor": [
+                    "Permit to Work",
+                    "Risk Assessment / JSA Awareness",
+                    "Emergency Response & Evacuation"
+                ]
+            },
+
+            "General Employees": {
+
+                "Employee": [
+                    "HSE / Site Safety Induction",
+                    "Emergency Response & Evacuation",
+                    "Fire Safety & Extinguisher Awareness",
+                    "First Aid Awareness",
+                    "Incident & Near-Miss Reporting",
+                    "Environmental Awareness"
+                ]
+            }
+        }
+    }
+};
+
+    const matrixData = Object.fromEntries(
+        Object.entries(trainingMatrix).map(([vertical, node]) => {
+            const modules = [...new Set([
+                ...commonTraining,
+                ...Object.values(node.departments).flatMap(roleMap => Object.values(roleMap)).flat()
+            ])];
+
+            const departments = Object.keys(node.departments);
+            const rows = {};
+
+            departments.forEach(dept => {
+                const roleModules = Object.values(node.departments[dept]).flat();
+                rows[dept] = modules.map(module => {
+                    const isRequired = roleModules.includes(module) || commonTraining.includes(module);
+                    return isRequired ? 'Required' : 'Optional';
+                });
+            });
+
+            return [vertical, { name: node.name, modules, departments, rows }];
+        })
+    );
+
+    const csrfToken = {{ csrf_token()|tojson }};
+    const trainingHoursStorageKey = 'safetyTrainingModuleHours';
+
+    function readStoredJson(key, fallback) {
+        try {
+            const storedValue = localStorage.getItem(key);
+            return storedValue ? JSON.parse(storedValue) : fallback;
+        } catch (error) {
+            console.error(`Unable to load ${key} from browser storage.`, error);
+            return fallback;
+        }
+    }
+
+    let performanceRecords = [];
+
+    let trainingHoursByModule = readStoredJson(trainingHoursStorageKey, {});
+    if (!trainingHoursByModule || Array.isArray(trainingHoursByModule) || typeof trainingHoursByModule !== 'object') {
+        console.error('Saved training-hour mapping is invalid; starting with an empty mapping.');
+        trainingHoursByModule = {};
+    }
+
+    async function savePerformanceData() {
+        try {
+            localStorage.setItem(trainingHoursStorageKey, JSON.stringify(trainingHoursByModule));
+            const response = await fetch('{{ url_for("training_records_api") }}', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ records: performanceRecords })
+            });
+            if (!response.ok) {
+                throw new Error(`Server rejected training records (${response.status}).`);
+            }
+            return true;
+        } catch (error) {
+            console.error('Unable to save training performance data to the server.', error);
+            setPerformanceWorkbookStatus(error.message || 'Could not save training tracker data to the server.', true);
+            return false;
+        }
+    }
+
+    function setPerformanceWorkbookStatus(message, isError = false) {
+        ['performanceWorkbookStatus', 'uploadStatus'].forEach(id => {
+            const status = document.getElementById(id);
+            if (!status) return;
+            status.textContent = message;
+            status.style.color = isError ? 'var(--check-orange)' : 'var(--do-teal)';
+        });
+    }
+
+    function getTrainingVerticalLabel(vertical) {
+        return trainingMatrix[vertical] ? trainingMatrix[vertical].name : vertical;
+    }
+
+    function getAllTrainingModules() {
+        return Array.from(new Set(Object.values(trainingMatrix).flatMap(vertical =>
+            Object.values(vertical.departments).flatMap(department =>
+                Object.values(department).flatMap(roleModules => roleModules)
+            )
+        ).concat(commonTraining))).sort((a, b) => a.localeCompare(b));
+    }
+
+    async function initializePerformanceTracker() {
+        const verticalSelect = document.getElementById('performanceVertical');
+        if (verticalSelect) {
+            verticalSelect.innerHTML = '';
+            Object.keys(trainingMatrix).forEach(vertical => {
+                const option = document.createElement('option');
+                option.value = vertical;
+                option.textContent = getTrainingVerticalLabel(vertical);
+                verticalSelect.appendChild(option);
+            });
+            updatePerformanceFormDepartments();
+        }
+        try {
+            const response = await fetch('{{ url_for("training_records_api") }}');
+            if (!response.ok) {
+                throw new Error(`Could not load training records (${response.status}).`);
+            }
+            const payload = await response.json();
+            if (!Array.isArray(payload.records)) {
+                throw new Error('The server returned invalid training records.');
+            }
+            performanceRecords = payload.records;
+        } catch (error) {
+            console.error('Unable to load training performance data from the server.', error);
+            setPerformanceWorkbookStatus(error.message || 'Could not load training records.', true);
+        }
+        renderPerformanceTracker();
+    }
+
+    function updatePerformanceFormDepartments() {
+        const vertical = document.getElementById('performanceVertical').value;
+        const departmentSelect = document.getElementById('performanceDepartment');
+        departmentSelect.innerHTML = '';
+
+        Object.keys(trainingMatrix[vertical].departments).forEach(department => {
+            const option = document.createElement('option');
+            option.value = department;
+            option.textContent = department;
+            departmentSelect.appendChild(option);
+        });
+        updatePerformanceFormRoles();
+    }
+
+    function updatePerformanceFormRoles() {
+        const vertical = document.getElementById('performanceVertical').value;
+        const department = document.getElementById('performanceDepartment').value;
+        const roleSelect = document.getElementById('performanceRole');
+        roleSelect.innerHTML = '';
+
+        const roles = Object.keys(trainingMatrix[vertical].departments[department] || {});
+        roles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role;
+            option.textContent = role;
+            roleSelect.appendChild(option);
+        });
+        updatePerformanceFormModules();
+    }
+
+    function updatePerformanceFormModules(selectedModule = '') {
+        const vertical = document.getElementById('performanceVertical').value;
+        const department = document.getElementById('performanceDepartment').value;
+        const role = document.getElementById('performanceRole').value;
+        const moduleSelect = document.getElementById('performanceModule');
+        if (!moduleSelect) return;
+        moduleSelect.innerHTML = '';
+
+        const roleModules = (trainingMatrix[vertical].departments[department] || {})[role] || [];
+        const modules = Array.from(new Set([...commonTraining, ...roleModules]));
+        modules.forEach(module => {
+            const option = document.createElement('option');
+            option.value = module;
+            option.textContent = module;
+            moduleSelect.appendChild(option);
+        });
+        if (selectedModule && modules.includes(selectedModule)) {
+            moduleSelect.value = selectedModule;
+        }
+    }
+
+    function resetPerformanceForm() {
+        document.getElementById('performanceRecordForm').reset();
+        document.getElementById('performanceRecordId').value = '';
+        document.getElementById('performanceSaveButton').textContent = 'Save Training Record';
+        updatePerformanceFormDepartments();
+    }
+
+    async function savePerformanceRecord(event) {
+        event.preventDefault();
+        const recordIdInput = document.getElementById('performanceRecordId');
+        const recordId = recordIdInput.value || `training-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const record = {
+            id: recordId,
+            vertical: document.getElementById('performanceVertical').value,
+            department: document.getElementById('performanceDepartment').value,
+            role: document.getElementById('performanceRole').value,
+            module: document.getElementById('performanceModule').value,
+            employee: document.getElementById('performanceEmployee').value.trim(),
+            status: document.getElementById('performanceStatus').value,
+            completionDate: document.getElementById('performanceCompletionDate').value
+        };
+
+        if (!record.employee) {
+            setPerformanceWorkbookStatus('Enter an employee name before saving the record.', true);
+            return;
+        }
+        if (record.status !== 'Completed') {
+            record.completionDate = '';
+        }
+
+        const previousRecords = performanceRecords;
+        performanceRecords = [...performanceRecords];
+        const existingIndex = performanceRecords.findIndex(item => item.id === recordId);
+        if (existingIndex === -1) {
+            performanceRecords.unshift(record);
+        } else {
+            performanceRecords[existingIndex] = record;
+        }
+        if (!await savePerformanceData()) {
+            performanceRecords = previousRecords;
+            return;
+        }
+
+        resetPerformanceForm();
+        renderPerformanceTracker();
+        setPerformanceWorkbookStatus('Training record saved.');
+    }
+
+    function editPerformanceRecord(recordId) {
+        const record = performanceRecords.find(item => item.id === recordId);
+        if (!record) {
+            setPerformanceWorkbookStatus('Could not find the selected training record.', true);
+            return;
+        }
+
+        document.getElementById('performanceRecordId').value = record.id;
+        document.getElementById('performanceVertical').value = record.vertical;
+        updatePerformanceFormDepartments();
+        document.getElementById('performanceDepartment').value = record.department;
+        updatePerformanceFormRoles();
+        document.getElementById('performanceRole').value = record.role;
+        updatePerformanceFormModules(record.module);
+        document.getElementById('performanceEmployee').value = record.employee;
+        document.getElementById('performanceStatus').value = record.status;
+        document.getElementById('performanceCompletionDate').value = record.completionDate || '';
+        document.getElementById('performanceSaveButton').textContent = 'Update Training Record';
+        document.getElementById('performanceEmployee').focus();
+    }
+
+    function renderPerformanceTracker() {
+        const tableBody = document.getElementById('performanceRecordsBody');
+        if (!tableBody) return;
+        tableBody.innerHTML = '';
+
+        const completedCount = performanceRecords.filter(record => record.status === 'Completed').length;
+        const totalCount = performanceRecords.length;
+        const totalHours = performanceRecords.reduce((sum, record) => {
+            if (record.status !== 'Completed') return sum;
+            const hours = Number(trainingHoursByModule[record.module]);
+            return sum + (Number.isFinite(hours) && hours > 0 ? hours : 0);
+        }, 0);
+        const compliance = totalCount ? ((completedCount / totalCount) * 100).toFixed(1) : '0';
+        document.getElementById('performanceCompliance').textContent = `${compliance}%`;
+        document.getElementById('performanceHours').textContent = `${totalHours.toLocaleString()} hrs`;
+        document.getElementById('performancePending').textContent = String(totalCount - completedCount);
+
+        if (!totalCount) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 9;
+            cell.className = 'performance-empty';
+            cell.textContent = 'No training records yet. Add a record above or upload an updated Excel workbook.';
+            row.appendChild(cell);
+            tableBody.appendChild(row);
+            return;
+        }
+
+        performanceRecords.forEach(record => {
+            const row = document.createElement('tr');
+            const hours = record.status === 'Completed' ? Number(trainingHoursByModule[record.module]) : 0;
+            const values = [
+                getTrainingVerticalLabel(record.vertical),
+                record.department,
+                record.role,
+                record.module,
+                record.employee,
+                record.status,
+                record.completionDate || '—',
+                Number.isFinite(hours) && hours > 0 ? `${hours} hrs` : (record.status === 'Completed' ? 'Set in Excel' : '—')
+            ];
+            values.forEach(value => {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.appendChild(cell);
+            });
+
+            const actionCell = document.createElement('td');
+            const editButton = document.createElement('button');
+            editButton.type = 'button';
+            editButton.className = 'btn';
+            editButton.textContent = 'Edit';
+            editButton.addEventListener('click', () => editPerformanceRecord(record.id));
+            actionCell.appendChild(editButton);
+            row.appendChild(actionCell);
+            tableBody.appendChild(row);
+        });
+    }
+
+    async function downloadPerformanceWorkbook() {
+        if (typeof ExcelJS === 'undefined') {
+            setPerformanceWorkbookStatus('Excel workbook export did not load. Check the network connection and reload this page.', true);
+            return;
+        }
+
+        try {
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'Safety Management System';
+            workbook.calcProperties.fullCalcOnLoad = true;
+
+            const recordsSheet = workbook.addWorksheet('Training Records');
+            recordsSheet.columns = [
+                { header: 'Record ID', key: 'id', width: 28 },
+                { header: 'Vertical', key: 'vertical', width: 30 },
+                { header: 'Department', key: 'department', width: 26 },
+                { header: 'Personnel Workgroup / Role', key: 'role', width: 34 },
+                { header: 'Training Module', key: 'module', width: 42 },
+                { header: 'Employee Name', key: 'employee', width: 26 }
+            ];
+
+            const recordRows = performanceRecords.map(record => ({
+                id: record.id,
+                vertical: getTrainingVerticalLabel(record.vertical),
+                department: record.department,
+                role: record.role,
+                module: record.module,
+                employee: record.employee
+            }));
+            recordsSheet.addRows(recordRows);
+
+            const hoursSheet = workbook.addWorksheet('Training Hours');
+            hoursSheet.columns = [
+                { header: 'Training Module', key: 'module', width: 44 },
+                { header: 'Hours per Module', key: 'hours', width: 22 }
+            ];
+            hoursSheet.addRows(getAllTrainingModules().map(module => ({
+                module,
+                hours: trainingHoursByModule[module] === undefined ? '' : Number(trainingHoursByModule[module])
+            })));
+            hoursSheet.getColumn(2).numFmt = '0.##';
+
+            recordsSheet.getCell('A1').note = 'Leave blank for a new record. Keep the ID to update that record when uploading the workbook.';
+            recordsSheet.getCell('F1').note = 'Every populated row in this worksheet is imported as a completed training record.';
+            hoursSheet.getCell('B1').note = 'Enter the duration for each module. Completed employee records use this value in the dashboard.';
+
+            const listsSheet = workbook.addWorksheet('Lists');
+            listsSheet.state = 'veryHidden';
+            const verticals = Object.keys(trainingMatrix).map(getTrainingVerticalLabel);
+            const modules = getAllTrainingModules();
+            const employees = Array.from(new Set(performanceRecords.map(record => record.employee).filter(Boolean))).sort();
+            if (!employees.length) employees.push('Enter employee name');
+            let nextListColumn = 1;
+            let dynamicListId = 0;
+            const excelColumnLetter = columnNumber => {
+                let letter = '';
+                while (columnNumber > 0) {
+                    columnNumber -= 1;
+                    letter = String.fromCharCode(65 + (columnNumber % 26)) + letter;
+                    columnNumber = Math.floor(columnNumber / 26);
+                }
+                return letter;
+            };
+            const addNamedList = (name, values) => {
+                const columnNumber = nextListColumn++;
+                const columnLetter = excelColumnLetter(columnNumber);
+                listsSheet.getCell(1, columnNumber).value = name;
+                values.forEach((value, index) => {
+                    listsSheet.getCell(index + 2, columnNumber).value = value;
+                });
+                workbook.definedNames.add(
+                    `'Lists'!$${columnLetter}$2:$${columnLetter}$${values.length + 1}`,
+                    name
+                );
+                return name;
+            };
+
+            addNamedList('VerticalOptions', verticals);
+            addNamedList('ModuleOptions', modules);
+            addNamedList('EmployeeOptions', employees);
+            const lookupRows = [];
+            Object.keys(trainingMatrix).forEach(vertical => {
+                const verticalLabel = getTrainingVerticalLabel(vertical);
+                const departmentEntries = Object.entries(trainingMatrix[vertical].departments);
+                const departments = departmentEntries.map(([department]) => department);
+                const departmentRange = addNamedList(`Departments_${++dynamicListId}`, departments);
+                lookupRows.push([verticalLabel, departmentRange]);
+
+                departmentEntries.forEach(([department, roleMap]) => {
+                    const roles = Object.keys(roleMap);
+                    const roleRange = addNamedList(`Roles_${++dynamicListId}`, roles);
+                    lookupRows.push([`${verticalLabel}|${department}`, roleRange]);
+
+                    roles.forEach(role => {
+                        const roleModules = Array.from(new Set([...commonTraining, ...roleMap[role]]));
+                        const moduleRange = addNamedList(`Modules_${++dynamicListId}`, roleModules);
+                        lookupRows.push([`${verticalLabel}|${department}|${role}`, moduleRange]);
+                    });
+                });
+            });
+            recordsSheet.getCell('H1').value = 'Lookup Key';
+            recordsSheet.getCell('I1').value = 'Named Range';
+            lookupRows.forEach((lookup, index) => {
+                recordsSheet.getCell(index + 2, 8).value = lookup[0];
+                recordsSheet.getCell(index + 2, 9).value = lookup[1];
+            });
+            recordsSheet.getColumn(8).hidden = true;
+            recordsSheet.getColumn(9).hidden = true;
+
+            const lastValidationRow = Math.max(recordsSheet.rowCount + 200, 1000);
+            for (let row = 2; row <= lastValidationRow; row++) {
+                recordsSheet.getCell(`A${row}`).dataValidation = {
+                    type: 'custom', allowBlank: true,
+                    formulae: [`=OR(A${row}="",COUNTIF($A:$A,A${row})=1)`],
+                    showErrorMessage: true, errorTitle: 'Duplicate Record ID', error: 'Record IDs must be unique. Leave blank for a new record.'
+                };
+                recordsSheet.getCell(`B${row}`).dataValidation = {
+                    type: 'list', allowBlank: false, formulae: ['=VerticalOptions'],
+                    showErrorMessage: true, errorTitle: 'Select a listed vertical', error: 'Choose a vertical from the dropdown.'
+                };
+                recordsSheet.getCell(`C${row}`).dataValidation = {
+                    type: 'list', allowBlank: false,
+                    formulae: [`=INDIRECT(VLOOKUP($B${row},$H:$I,2,FALSE))`],
+                    showErrorMessage: true, errorTitle: 'Select a listed department', error: 'Choose a department for the selected vertical.'
+                };
+                recordsSheet.getCell(`D${row}`).dataValidation = {
+                    type: 'list', allowBlank: false,
+                    formulae: [`=INDIRECT(VLOOKUP($B${row}&"|"&$C${row},$H:$I,2,FALSE))`],
+                    showErrorMessage: true, errorTitle: 'Select a listed workgroup', error: 'Choose a role for the selected vertical and department.'
+                };
+                recordsSheet.getCell(`E${row}`).dataValidation = {
+                    type: 'list', allowBlank: false,
+                    formulae: [`=INDIRECT(VLOOKUP($B${row}&"|"&$C${row}&"|"&$D${row},$H:$I,2,FALSE))`],
+                    showErrorMessage: true, errorTitle: 'Select a listed module', error: 'Choose a module for the selected vertical, department, and role.'
+                };
+                recordsSheet.getCell(`F${row}`).dataValidation = {
+                    type: 'list', allowBlank: false, formulae: ['=EmployeeOptions'],
+                    showErrorMessage: false, promptTitle: 'Employee name', prompt: 'Choose a known employee or type a new name.'
+                };
+                hoursSheet.getCell(`A${row}`).dataValidation = {
+                    type: 'list', allowBlank: false, formulae: ['=ModuleOptions'],
+                    showErrorMessage: true, errorTitle: 'Select a listed module', error: 'Choose a training module from the dropdown.'
+                };
+                hoursSheet.getCell(`B${row}`).dataValidation = {
+                    type: 'decimal', operator: 'greaterThanOrEqual', formulae: [0], allowBlank: true,
+                    showErrorMessage: true, errorTitle: 'Invalid training hours', error: 'Enter zero or a positive number of hours.'
+                };
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const downloadUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = downloadUrl;
+            downloadLink.download = 'training_performance.xlsx';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            downloadLink.remove();
+            setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+            setPerformanceWorkbookStatus('Workbook downloaded with cascading training dropdowns. Upload it after editing; each populated training row is imported as completed.');
+        } catch (error) {
+            console.error('Unable to create the training performance workbook.', error);
+            setPerformanceWorkbookStatus(error.message || 'Could not create the Excel workbook.', true);
+        }
+    }
+
+    function resolveImportedVertical(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        return Object.keys(trainingMatrix).find(vertical =>
+            vertical.toLowerCase() === normalized ||
+            trainingMatrix[vertical].name.toLowerCase() === normalized
+        );
+    }
+
+    function importPerformanceWorkbook(event) {
+        const input = event.target;
+        const file = input.files && input.files[0];
+        if (!file) return;
+        if (typeof XLSX === 'undefined') {
+            setPerformanceWorkbookStatus('Excel support did not load. Check the network connection and reload this page.', true);
+            input.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onerror = () => {
+            setPerformanceWorkbookStatus('Could not read the selected workbook.', true);
+            input.value = '';
+        };
+        reader.onload = async () => {
+            try {
+                const workbook = XLSX.read(reader.result, { type: 'array', cellDates: true });
+                const recordsSheetName = workbook.SheetNames.find(name => name.toLowerCase() === 'training records') || workbook.SheetNames[0];
+                if (!recordsSheetName) throw new Error('Workbook does not contain a training-records worksheet.');
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[recordsSheetName], { defval: '' });
+                const uploadedRecords = [];
+                const uploadedIds = new Set();
+                const moduleNames = new Set(getAllTrainingModules());
+
+                rows.forEach((row, index) => {
+                    const hasRecordData = [
+                        'Record ID', 'Vertical', 'Department', 'Personnel Workgroup / Role',
+                        'Training Module', 'Employee Name'
+                    ].some(column => String(row[column] || '').trim() !== '');
+                    if (!hasRecordData) return;
+
+                    const vertical = resolveImportedVertical(row.Vertical);
+                    const department = String(row.Department || '').trim();
+                    const role = String(row['Personnel Workgroup / Role'] || row.Workgroup || '').trim();
+                    const module = String(row['Training Module'] || '').trim();
+                    const employee = String(row['Employee Name'] || '').trim();
+
+                    if (!vertical || !trainingMatrix[vertical].departments[department]) {
+                        throw new Error(`Row ${index + 2}: unknown vertical or department.`);
+                    }
+                    const roleModules = trainingMatrix[vertical].departments[department][role];
+                    if (!roleModules) {
+                        throw new Error(`Row ${index + 2}: workgroup/role does not belong to the selected department.`);
+                    }
+                    if (!moduleNames.has(module) || (![...commonTraining, ...roleModules].includes(module))) {
+                        throw new Error(`Row ${index + 2}: training module does not match the selected role.`);
+                    }
+                    if (!employee) {
+                        throw new Error(`Row ${index + 2}: employee name is missing.`);
+                    }
+
+                    const id = String(row['Record ID'] || '').trim() || `training-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`;
+                    if (uploadedIds.has(id)) throw new Error(`Row ${index + 2}: duplicate Record ID.`);
+                    uploadedIds.add(id);
+                    const existingRecord = performanceRecords.find(record => record.id === id);
+                    uploadedRecords.push({
+                        id, vertical, department, role, module, employee,
+                        status: 'Completed',
+                        completionDate: existingRecord ? existingRecord.completionDate : ''
+                    });
+                });
+
+                const hoursSheetName = workbook.SheetNames.find(name => name.toLowerCase() === 'training hours');
+                const updatedHours = { ...trainingHoursByModule };
+                if (hoursSheetName) {
+                    const hourRows = XLSX.utils.sheet_to_json(workbook.Sheets[hoursSheetName], { defval: '' });
+                    hourRows.forEach((row, index) => {
+                        const module = String(row['Training Module'] || '').trim();
+                        const rawHours = row['Hours per Module'];
+                        if (!module && (rawHours === '' || rawHours === undefined)) return;
+                        if (!module || !moduleNames.has(module)) {
+                            throw new Error(`Training Hours row ${index + 2}: select a valid training module.`);
+                        }
+                        if (rawHours === '' || rawHours === undefined) {
+                            delete updatedHours[module];
+                            return;
+                        }
+                        const hours = Number(rawHours);
+                        if (!Number.isFinite(hours) || hours < 0) {
+                            throw new Error(`Training Hours row ${index + 2}: enter hours of zero or more.`);
+                        }
+                        updatedHours[module] = hours;
+                    });
+                }
+
+                const recordsById = new Map(performanceRecords.map(record => [record.id, record]));
+                uploadedRecords.forEach(record => recordsById.set(record.id, record));
+                const previousRecords = performanceRecords;
+                performanceRecords = Array.from(recordsById.values());
+                trainingHoursByModule = updatedHours;
+                if (!await savePerformanceData()) {
+                    performanceRecords = previousRecords;
+                    return;
+                }
+                renderPerformanceTracker();
+                setPerformanceWorkbookStatus(`Imported ${uploadedRecords.length} training record(s). Matching Record IDs were updated; new IDs were added.`);
+            } catch (error) {
+                console.error('Unable to import training performance workbook.', error);
+                setPerformanceWorkbookStatus(error.message || 'Workbook import failed. Check the file format and worksheet data.', true);
+            } finally {
+                input.value = '';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+
+    // Global Tracker Storage Database State Array System with unique IDs and completion flag status tracking
+    let scheduledEvents = [
+        { id: 1, day: 2, sector: "construction", course: "Site Safety Induction", team: "Civil Works Crew", completed: false },
+        { id: 2, day: 4, sector: "construction", course: "Scaffolding Awareness", team: "HSE Scaffold Inspectors", completed: false },
+        { id: 3, day: 7, sector: "construction", course: "Excavation Hazard Control", team: "Civil Works Crew", completed: false }
+    ];
+
+    // Cascade Trigger Layer Updating Departments List Box Elements
+    function updateDepartmentDropdown() {
+        const vertical = document.getElementById('matrixVertical') ? document.getElementById('matrixVertical').value : 'construction';
+        const deptDropdown = document.getElementById('matrixDept');
+        if(!deptDropdown) return;
+        deptDropdown.innerHTML = '';
+
+        let allOpt = document.createElement('option');
+        allOpt.value = "ALL";
+        allOpt.innerText = "-- All Departments --";
+        deptDropdown.appendChild(allOpt);
+
+        const departments = matrixData[vertical] ? matrixData[vertical].departments : [];
+        departments.forEach(dept => {
+            let opt = document.createElement('option');
+            opt.value = dept;
+            opt.innerText = dept;
+            deptDropdown.appendChild(opt);
+        });
+
+        if (departments.length) {
+            deptDropdown.value = 'ALL';
+        }
+    }
+
+    // Dynamic Matrix Layout Render Grid Engine
+    function renderDynamicMatrix() {
+        const verticalSelect = document.getElementById('matrixVertical');
+        const deptSelect = document.getElementById('matrixDept');
+        if (verticalSelect && (!deptSelect || !deptSelect.value)) {
+            updateDepartmentDropdown();
+        }
+
+        const vertical = verticalSelect ? verticalSelect.value : 'construction';
+        const selectedDept = deptSelect ? deptSelect.value : 'ALL';
+
+        const headerContainer = document.getElementById('matrixHeader');
+        const bodyContainer = document.getElementById('matrixBody');
+
+        if(!headerContainer || !bodyContainer) return;
+        headerContainer.innerHTML = '';
+        bodyContainer.innerHTML = '';
+
+        const dataNode = matrixData[vertical] || { modules: [], departments: [], rows: {} };
+
+        let headerHtml = `<tr><th>Division / Personnel Workgroup</th>`;
+        dataNode.modules.forEach(mod => {
+            headerHtml += `<th>${mod}</th>`;
+        });
+        headerHtml += `<th>Action Menu Dispatch</th></tr>`;
+        headerContainer.innerHTML = headerHtml;
+
+        let deptsToRender = selectedDept === "ALL" ? dataNode.departments : [selectedDept];
+
+        deptsToRender.forEach(dept => {
+            let tr = document.createElement('tr');
+            let rowHtml = `<td><strong>${dept}</strong></td>`;
+
+            const deptRow = dataNode.rows[dept] || [];
+            dataNode.modules.forEach((mod, index) => {
+                let status = deptRow[index] || 'Optional';
+                let cellClass = status === "Required" ? "matrix-cell-req" : "matrix-cell-opt";
+                rowHtml += `<td class="${cellClass}">${status}</td>`;
+            });
+
+            rowHtml += `<td><button class="btn" style="padding: 6px 12px; font-size: 13px;" onclick="initMatrixSchedule('${vertical}', '${dept}')">Schedule Matrix Session</button></td>`;
+            tr.innerHTML = rowHtml;
+            bodyContainer.appendChild(tr);
+        });
+    }
+
+    // Link Matrix Grid Actions with Scheduler Form Modal Values Contexts
+    function initMatrixSchedule(vertical, department) {
+        const industrySelect = document.getElementById('industrySelect');
+        if (industrySelect) {
+            industrySelect.value = vertical;
+        }
+        updateTrainingDropdowns();
+        openSchedulingModal(null, null, department);
+        switchTab('calendar');
+    }
+
+    // Open Modal Overlay UI Elements (Upgraded to accept existing objects for editing/completion toggles)
+    function openSchedulingModal(prefilledDay = null, prefilledCourse = null, prefilledGroup = null, existingEventObj = null) {
+        const titleEl = document.getElementById('modalTitle');
+        const completeBtn = document.getElementById('toggleCompleteBtn');
+        const deleteBtn = document.getElementById('deleteEventBtn');
+        const saveBtn = document.getElementById('saveEventBtn');
+        const industrySelect = document.getElementById('industrySelect');
+        const courseSelect = document.getElementById('courseSelect');
+        const divisionSelect = document.getElementById('divisionSelect');
+        const targetGroupSelect = document.getElementById('targetGroup');
+
+        if (existingEventObj) {
+            titleEl.innerText = "Manage Training Record";
+            document.getElementById('editingEventId').value = existingEventObj.id;
+            document.getElementById('modalDay').value = existingEventObj.day;
+            document.getElementById('modalDay').disabled = true;
+            document.getElementById('industrySelect').value = existingEventObj.sector;
+            updatePlanningDropdowns();
+            document.getElementById('courseSelect').value = existingEventObj.course;
+
+            if (divisionSelect) {
+                const sectorData = trainingMatrix[existingEventObj.sector] || {};
+                const departments = Object.keys(sectorData.departments || {});
+                const matchingDept = departments.find(dept => existingEventObj.team && existingEventObj.team.includes(dept.split(' / ')[0]) || dept === existingEventObj.team);
+                divisionSelect.value = matchingDept || departments[0] || '';
+            }
+            updateWorkgroupDropdown();
+            if (targetGroupSelect && existingEventObj.team) {
+                const matchedOption = Array.from(targetGroupSelect.options).find(opt => opt.value === existingEventObj.team);
+                targetGroupSelect.value = matchedOption ? existingEventObj.team : (targetGroupSelect.options[0] ? targetGroupSelect.options[0].value : '');
+            }
+
+            completeBtn.style.display = 'inline-block';
+            completeBtn.innerText = existingEventObj.completed ? "Mark Active (Scheduled)" : "Mark Completed";
+            completeBtn.className = existingEventObj.completed ? "btn btn-secondary" : "btn btn-success-toggle";
+            deleteBtn.style.display = 'inline-block';
+            saveBtn.innerText = "Update Details";
+        } else {
+            titleEl.innerText = "Plan Training Session";
+            document.getElementById('editingEventId').value = "";
+            document.getElementById('modalDay').value = prefilledDay || "";
+            document.getElementById('modalDay').disabled = !!prefilledDay;
+
+            if (industrySelect) {
+                industrySelect.value = industrySelect.value || 'construction';
+            }
+            updatePlanningDropdowns();
+
+            if (divisionSelect && prefilledGroup) {
+                divisionSelect.value = prefilledGroup;
+            }
+            updateWorkgroupDropdown();
+
+            if (targetGroupSelect && targetGroupSelect.options.length) {
+                targetGroupSelect.value = targetGroupSelect.options[0].value;
+            }
+            if (courseSelect) {
+                courseSelect.value = prefilledCourse || (courseSelect.options[0] ? courseSelect.options[0].value : '');
+            }
+
+            completeBtn.style.display = 'none';
+            deleteBtn.style.display = 'none';
+            saveBtn.innerText = "Confirm Schedule";
+        }
+
+        document.getElementById('schedulerModal').style.display = 'flex';
+    }
+
+    function closeSchedulingModal() {
+        document.getElementById('schedulerModal').style.display = 'none';
+    }
+
+    function updatePlanningDropdowns() {
+        const industrySelect = document.getElementById('industrySelect');
+        const sector = industrySelect ? industrySelect.value : 'construction';
+        const divisionSelect = document.getElementById('divisionSelect');
+
+        if (divisionSelect) {
+            const previousValue = divisionSelect.value;
+            divisionSelect.innerHTML = '';
+            const deploymentData = (trainingMatrix[sector] && trainingMatrix[sector].departments) || {};
+            const departments = Object.keys(deploymentData);
+
+            departments.forEach(dept => {
+                let opt = document.createElement('option');
+                opt.value = dept;
+                opt.innerText = dept;
+                divisionSelect.appendChild(opt);
+            });
+
+            if (departments.length) {
+                divisionSelect.value = previousValue && departments.indexOf(previousValue) !== -1 ? previousValue : departments[0];
+            }
+        }
+
+        updateWorkgroupDropdown();
+        updateTrainingDropdowns();
+    }
+
+    function updateWorkgroupDropdown() {
+        const industrySelect = document.getElementById('industrySelect');
+        const divisionSelect = document.getElementById('divisionSelect');
+        const targetGroupSelect = document.getElementById('targetGroup');
+        const sector = industrySelect ? industrySelect.value : 'construction';
+        const selectedDivision = divisionSelect ? divisionSelect.value : '';
+
+        if (!targetGroupSelect) return;
+        targetGroupSelect.innerHTML = '';
+
+        const departments = (trainingMatrix[sector] && trainingMatrix[sector].departments) || {};
+        const currentDepartment = departments[selectedDivision] || {};
+        const workgroups = Object.keys(currentDepartment);
+
+        if (!workgroups.length) {
+            let opt = document.createElement('option');
+            opt.value = '';
+            opt.innerText = 'No workgroups available';
+            targetGroupSelect.appendChild(opt);
+            updateTrainingDropdowns();
+            return;
+        }
+
+        workgroups.forEach(workgroup => {
+            let opt = document.createElement('option');
+            opt.value = workgroup;
+            opt.innerText = workgroup;
+            targetGroupSelect.appendChild(opt);
+        });
+
+        targetGroupSelect.value = workgroups[0];
+        updateTrainingDropdowns();
+    }
+
+    // Filter available tracking training modules list based on selected industry branch and department/workgroup
+    function updateTrainingDropdowns() {
+        const industrySelect = document.getElementById('industrySelect');
+        const divisionSelect = document.getElementById('divisionSelect');
+        const targetGroupSelect = document.getElementById('targetGroup');
+        const courseDropdown = document.getElementById('courseSelect');
+        const sector = industrySelect ? industrySelect.value : 'construction';
+        const selectedDivision = divisionSelect ? divisionSelect.value : '';
+        const selectedWorkgroup = targetGroupSelect ? targetGroupSelect.value : '';
+
+        if (!courseDropdown) return;
+        courseDropdown.innerHTML = '';
+
+        let availableCourses = [];
+        const sectorData = trainingMatrix[sector] || trainingMatrix.construction;
+        const divisionRoles = (sectorData.departments && sectorData.departments[selectedDivision]) || {};
+
+        if (selectedDivision && Object.keys(divisionRoles).length) {
+            if (selectedWorkgroup && divisionRoles[selectedWorkgroup]) {
+                availableCourses = divisionRoles[selectedWorkgroup];
+            } else {
+                Object.keys(divisionRoles).forEach(role => {
+                    availableCourses = availableCourses.concat(divisionRoles[role] || []);
+                });
+            }
+        }
+
+        if (!availableCourses.length) {
+            availableCourses = industryCourses[sector] || industryCourses.construction;
+        }
+
+        const uniqueCourses = Array.from(new Set(availableCourses));
+        uniqueCourses.forEach(course => {
+            let opt = document.createElement('option');
+            opt.value = course;
+            opt.innerText = course;
+            courseDropdown.appendChild(opt);
+        });
+
+        if (uniqueCourses.length) {
+            courseDropdown.value = uniqueCourses[0];
+        }
+    }
+
+    function renderCalendar() {
+        const calendarContainer = document.getElementById('calendarDays');
+        if (!calendarContainer) return;
+
+        const monthSelect = document.getElementById('month-select');
+        const activeMonth = monthSelect ? monthSelect.value : 'October';
+
+        const monthMap = {
+            October: 9,
+            November: 10
+        };
+
+        const year = 2026;
+        const monthIndex = monthMap[activeMonth] !== undefined ? monthMap[activeMonth] : 9;
+
+        const firstDay = new Date(year, monthIndex, 1).getDay();
+        const totalDays = new Date(year, monthIndex + 1, 0).getDate();
+
+        calendarContainer.innerHTML = '';
+
+        // Blank cells before first day of month
+        for (let i = 0; i < firstDay; i++) {
+            const spacer = document.createElement('div');
+            spacer.className = 'calendar-day empty';
+            calendarContainer.appendChild(spacer);
+        }
+
+        // Generate calendar days
+        for (let day = 1; day <= totalDays; day++) {
+
+            const dayCell = document.createElement('div');
+            dayCell.className = 'calendar-day';
+
+            dayCell.innerHTML = `
+                <div class="day-number">${day}</div>
+            `;
+
+            const eventsForDay = scheduledEvents.filter(
+                event => event.day === day
+            );
+
+            eventsForDay.slice(0, 3).forEach(event => {
+
+                const badge = document.createElement('div');
+
+                badge.className = event.completed
+                    ? 'calendar-event completed-event'
+                    : 'calendar-event scheduled-event';
+
+                badge.innerHTML = `
+                    <div class="calendar-course">
+                        ${event.course}
+                    </div>
+
+                    <div class="calendar-team">
+                        ${event.team}
+                    </div>
+
+                    <div class="calendar-status">
+                        ${event.completed ? '✓ COMPLETED' : '● SCHEDULED'}
+                    </div>
+                `;
+
+                // Make training clickable
+                badge.onclick = function(e) {
+                    e.stopPropagation();
+                    openSchedulingModal(
+                        event.day,
+                        event.course,
+                        event.team,
+                        event
+                    );
+                };
+
+                badge.title = "Click to manage training";
+
+                dayCell.appendChild(badge);
+            });
+
+            if (eventsForDay.length > 3) {
+
+                const more = document.createElement('div');
+
+                more.className = 'calendar-event more';
+
+                more.textContent =
+                    `+${eventsForDay.length - 3} more`;
+
+                dayCell.appendChild(more);
+            }
+
+            // Clicking empty area of day allows new training
+            dayCell.onclick = function() {
+
+                const existingCount = scheduledEvents.filter(
+                    event => event.day === day
+                ).length;
+
+                if (existingCount >= 3) {
+                    alert(
+                        'Maximum 3 training sessions are allowed for this day.'
+                    );
+                    return;
+                }
+
+                openSchedulingModal(day);
+            };
+
+            calendarContainer.appendChild(dayCell);
+        }
+    }
+            // Validate Input Constraints and Append to Global Tracking State Array
+        function savePlannedTraining() {
+
+            const eventIdStr = document.getElementById('editingEventId').value;
+            const dayVal = parseInt(document.getElementById('modalDay').value, 10);
+            const sector = document.getElementById('industrySelect').value;
+            const course = document.getElementById('courseSelect').value;
+            const team = document.getElementById('targetGroup').value.trim();
+
+            // Validate day
+            if (!Number.isInteger(dayVal) || dayVal < 1 || dayVal > 31) {
+                alert('Please enter a valid day of month between 1 and 31.');
+                return;
+            }
+
+            // Validate fields
+            if (!sector || !course || !team) {
+                alert('Please complete the sector, course, and team details.');
+                return;
+            }
+
+            // -----------------------------------------
+            // KEEP COMPLETION STATUS WHEN EDITING
+            // -----------------------------------------
+
+            let completedStatus = false;
+
+            if (eventIdStr) {
+
+                const existingEvent = scheduledEvents.find(
+                    event => event.id === Number(eventIdStr)
+                );
+
+                if (existingEvent) {
+                    completedStatus = existingEvent.completed;
+                }
+            }
+
+            // -----------------------------------------
+            // CREATE / UPDATE TRAINING RECORD
+            // -----------------------------------------
+
+            const newEvent = {
+                id: eventIdStr ? Number(eventIdStr) : Date.now(),
+                day: dayVal,
+                sector,
+                course,
+                team,
+                completed: completedStatus
+            };
+
+            // Editing existing training
+            if (eventIdStr) {
+
+                const existingIndex = scheduledEvents.findIndex(
+                    event => event.id === Number(eventIdStr)
+                );
+
+                if (existingIndex !== -1) {
+
+                    scheduledEvents[existingIndex] = {
+                        ...scheduledEvents[existingIndex],
+                        ...newEvent
+                    };
+                }
+
+            } else {
+
+                // Creating new training
+                scheduledEvents.push(newEvent);
+            }
+
+            closeSchedulingModal();
+
+            renderCalendar();
+
+            updatePerformanceMetrics();
+        }
+
+
+    function deletePlannedTraining() {
+        const eventId = Number(document.getElementById('editingEventId').value);
+        const eventIndex = scheduledEvents.findIndex(event => event.id === eventId);
+
+        if (eventIndex === -1) {
+            alert('Training record could not be found for deletion.');
+            return;
+        }
+
+        scheduledEvents.splice(eventIndex, 1);
+        closeSchedulingModal();
+        renderCalendar();
+        updatePerformanceMetrics();
+    }
+
+    function toggleStatusPlannedTraining() {
+
+        const eventId = Number(
+            document.getElementById('editingEventId').value
+        );
+
+        const eventIndex = scheduledEvents.findIndex(
+            event => event.id === eventId
+        );
+
+        if (eventIndex === -1) {
+            alert("Training record could not be found.");
+            return;
+        }
+
+        scheduledEvents[eventIndex].completed =
+            !scheduledEvents[eventIndex].completed;
+
+        closeSchedulingModal();
+
+        renderCalendar();
+
+        updatePerformanceMetrics();
+    }
+
+    function updatePerformanceMetrics() {
+
+    const totalTraining = scheduledEvents.length;
+
+    const completedTraining = scheduledEvents.filter(
+        event => event.completed
+    ).length;
+
+    const pendingTraining = scheduledEvents.filter(
+        event => !event.completed
+    ).length;
+
+    const completionPercentage =
+        totalTraining > 0
+            ? ((completedTraining / totalTraining) * 100).toFixed(1)
+            : 0;
+
+    console.log("Total:", totalTraining);
+    console.log("Completed:", completedTraining);
+    console.log("Pending:", pendingTraining);
+    console.log("Completion:", completionPercentage + "%");
+}
+
+    initializePerformanceTracker();
+</script>
+{% endblock %}

@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Administrator Console</h2>
+<p class="text-muted">Manage {{ organization.organization_name }}'s project workspace, dashboard access, contractors, and subcontractors.</p>
+<div class="admin-card">
+    <strong>{{ organization.project_name }}</strong> · {{ organization.project_type }} · {{ organization.project_location }}
+    <div class="admin-small">{{ organization.industry }} · {{ organization.organization_type }}</div>
+</div>
+
+<style>
+    .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .admin-card { border: 1px solid #d9e2ec; border-radius: 6px; padding: 20px; margin-bottom: 22px; }
+    .admin-card h3 { margin-top: 0; }
+    .admin-card input, .admin-card select { margin-bottom: 14px; }
+    .admin-inline { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .admin-inline label { display: inline; margin: 0; }
+    .admin-small { color: #586574; font-size: .9rem; }
+    .admin-table-wrap { overflow-x: auto; }
+    .admin-alert { padding: 14px; background: #e8f5e9; border-left: 4px solid #2e7d32; overflow-wrap: anywhere; }
+    .admin-alert a { color: #0d47a1; }
+    .button-danger { background: #b42318; padding: 7px 12px; font-size: .9rem; }
+    .status-live { color: #16794b; font-weight: 700; }
+    .status-off { color: #a12b25; font-weight: 700; }
+</style>
+
+<div class="admin-inline" style="justify-content: space-between;">
+    <span>Signed in as {{ organization.organization_name }} administrator</span>
+    <form method="post" action="{{ url_for('admin_logout') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit">Sign Out</button>
+    </form>
+</div>
+
+{% if new_dashboard_link %}
+    <div class="admin-alert">
+        <strong>Dashboard link generated.</strong> Copy and share it with the intended person. The link is shown only once here:
+        <p><a href="{{ new_dashboard_link }}" target="_blank" rel="noopener">{{ new_dashboard_link }}</a></p>
+        <p class="admin-small">Anyone possessing this link can use it until it expires or is revoked. Treat it like a password.</p>
+    </div>
+{% endif %}
+
+<section class="admin-card">
+    <h3>Public Safety Observation QR Code</h3>
+    <p class="admin-small">Anyone who scans this organization-specific code can open the observation form and submit a report without signing in. It grants access only to observation reporting, not to the dashboard or other records. Regenerating the code immediately invalidates the previous code. Before generating a site code, configure HSE_PUBLIC_URL to an address reachable by workers’ phones; a localhost URL works only on the server computer.</p>
+    <form method="post" action="{{ url_for('create_observation_qr') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <button type="submit">Generate / Replace Observation QR Code</button>
+    </form>
+    {% if new_observation_qr %}
+        <div class="admin-alert" style="margin-top: 16px;">
+            <strong>New public observation QR code</strong>
+            <p>Print or share this QR code at the relevant worksite. Treat the link as public access; regenerate it if it is no longer intended to be available.</p>
+            <img src="{{ new_observation_qr.image }}" alt="QR code to submit a safety observation" width="240" height="240" style="background:white; padding:10px;">
+            <p><a href="{{ new_observation_qr.image }}" download="safety-observation-qr.svg">Download QR code (SVG)</a></p>
+            <p><a href="{{ new_observation_qr.url }}" target="_blank" rel="noopener">Open observation reporting form</a></p>
+        </div>
+    {% endif %}
+</section>
+
+<div class="admin-grid">
+    <section class="admin-card">
+        <h3>Dashboard Availability</h3>
+        <p class="admin-small">Turning this off blocks viewer links. Administrator links remain available.</p>
+        <form method="post" action="{{ url_for('update_dashboard_settings') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <div class="admin-inline">
+                <input type="checkbox" id="dashboard_enabled" name="dashboard_enabled" {% if dashboard_enabled %}checked{% endif %}>
+                <label for="dashboard_enabled">Dashboard enabled for viewers</label>
+            </div>
+            <button type="submit">Save Dashboard Setting</button>
+        </form>
+        <hr>
+        <h3>Administrator Dashboard Access</h3>
+        <p class="admin-small">Create a 12-hour administrator link to open the dashboard.</p>
+        <form method="post" action="{{ url_for('create_admin_dashboard_link') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <button type="submit">Generate My Dashboard Link</button>
+        </form>
+    </section>
+
+    <section class="admin-card">
+        <h3>Invite a Dashboard Viewer</h3>
+        <p class="admin-small">Create an expiring, revocable link for one named viewer. The link is a bearer credential; share it privately.</p>
+        <form method="post" action="{{ url_for('create_dashboard_invitation') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <label for="display_name">Viewer name</label>
+            <input type="text" id="display_name" name="display_name" maxlength="120" required>
+            <label for="email">Viewer email</label>
+            <input type="email" id="email" name="email" maxlength="254" required>
+            <label for="expires_in_hours">Link expires after</label>
+            <select id="expires_in_hours" name="expires_in_hours" required>
+                <option value="1">1 hour</option>
+                <option value="24" selected>24 hours</option>
+                <option value="168">7 days</option>
+                <option value="720">30 days</option>
+            </select>
+            <button type="submit">Generate Viewer Link</button>
+        </form>
+    </section>
+</div>
+
+<section class="admin-card">
+    <h3>Dashboard Access Links</h3>
+    <div class="admin-table-wrap">
+        <table>
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Expires (UTC)</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+                {% for link in access_links %}
+                    <tr>
+                        <td>{{ link.display_name }}</td>
+                        <td>{{ link.email }}</td>
+                        <td>{{ link.role|title }}</td>
+                        <td>{{ link.expires_at }}</td>
+                        <td>
+                            {% if link.revoked_at %}
+                                Revoked
+                            {% elif link.expires_at <= now_iso %}
+                                Expired
+                            {% else %}
+                                <span class="status-live">Active</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not link.revoked_at and link.expires_at > now_iso %}
+                                <form method="post" action="{{ url_for('revoke_dashboard_invitation', access_id=link.access_id) }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                    <button class="button-danger" type="submit">Revoke</button>
+                                </form>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No dashboard links have been created.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="admin-grid">
+    <section class="admin-card">
+        <h3>Add Contractor or Subcontractor</h3>
+        <form method="post" action="{{ url_for('add_contractor') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+            <label for="company_name">Company name</label>
+            <input type="text" id="company_name" name="company_name" maxlength="160" required>
+            <label for="contractor_type">Organization type</label>
+            <select id="contractor_type" name="contractor_type" required>
+                <option value="Contractor">Contractor</option>
+                <option value="Subcontractor">Subcontractor</option>
+            </select>
+            <div id="parent_contractor_group" hidden>
+            <label for="parent_contractor_id">Parent contractor (for subcontractors)</label>
+            <select id="parent_contractor_id" name="parent_contractor_id" disabled>
+                <option value="">-- No parent contractor --</option>
+                {% for contractor in contractors if contractor.contractor_type == 'Contractor' %}
+                    <option value="{{ contractor.contractor_id }}">{{ contractor.company_name }}</option>
+                {% endfor %}
+            </select>
+            </div>
+            <script>
+                (function () {
+                    const type = document.getElementById('contractor_type');
+                    const group = document.getElementById('parent_contractor_group');
+                    const parent = document.getElementById('parent_contractor_id');
+                    function sync() {
+                        const sub = type.value === 'Subcontractor';
+                        group.hidden = !sub;
+                        parent.disabled = !sub;
+                        if (!sub) parent.value = '';
+                    }
+                    type.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
+            <label for="trade_type">Trade / service</label>
+            <input type="text" id="trade_type" name="trade_type" maxlength="120">
+            <button type="submit">Add Organization</button>
+        </form>
+    </section>
+
+    <section class="admin-card">
+        <h3>Contractors and Subcontractors</h3>
+        <div class="admin-table-wrap">
+            <table>
+                <thead><tr><th>Company</th><th>Type</th><th>Parent</th><th>Trade</th></tr></thead>
+                <tbody>
+                    {% for contractor in contractors %}
+                        <tr>
+                            <td>{{ contractor.company_name }}</td>
+                            <td>{{ contractor.contractor_type }}</td>
+                            <td>{{ contractor.parent_company or '—' }}</td>
+                            <td>{{ contractor.trade_type or '—' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="4">No organizations have been added.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<section class="admin-card">
+    <h3>Invite Subcontractor Users and Assign Data-Entry Access</h3>
+    <p class="admin-small">Each invitation is tied to one subcontractor. The user sets a password from the single-use activation email.</p>
+    <form method="post" action="{{ url_for('invite_subcontractor_user') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <label for="full_name">User name</label>
+        <input type="text" id="full_name" name="full_name" maxlength="120" required>
+        <label for="subcontractor_email">Work email</label>
+        <input type="email" id="subcontractor_email" name="email" maxlength="254" required>
+        <label for="invite_contractor_id">Subcontractor</label>
+        <select id="invite_contractor_id" name="contractor_id" required>
+            <option value="">-- Select subcontractor --</option>
+            {% for contractor in contractors if contractor.contractor_type == 'Subcontractor' %}
+                <option value="{{ contractor.contractor_id }}">{{ contractor.company_name }}</option>
+            {% endfor %}
+        </select>
+        <fieldset>
+            <legend>Modules this user can access</legend>
+            <div class="admin-inline">
+                <label><input type="checkbox" name="modules" value="incident_logging"> Incident logging</label>
+                <label><input type="checkbox" name="modules" value="safety_observations"> Safety observations</label>
+                <label><input type="checkbox" name="modules" value="site_inspections"> Site inspections</label>
+                <label><input type="checkbox" name="modules" value="monthly_statistics"> Monthly statistics</label>
+                <label><input type="checkbox" name="modules" value="training_performance"> Training performance</label>
+            </div>
+        </fieldset>
+        <button type="submit">Send Activation Invitation</button>
+    </form>
+</section>
+
+<section class="admin-card">
+    <h3>Organization User Access</h3>
+    <form id="resetDropdownForm" method="post" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:15px;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+        <label for="resetUserSelect"><strong>Send password reset link to:</strong></label>
+        <select id="resetUserSelect" required style="min-width:280px;">
+            <option value="">-- Select user email --</option>
+            {% for user in users if user.is_active and user.email_verified_at %}
+                <option value="{{ url_for('send_user_password_reset', user_id=user.user_id) }}">{{ user.email }} ({{ user.full_name }})</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Send Reset Link</button>
+    </form>
+    <script>
+        document.getElementById('resetDropdownForm').addEventListener('submit', function () {
+            this.action = document.getElementById('resetUserSelect').value;
+        });
+    </script>
+    <div class="admin-table-wrap">
+        <table>
+            <thead><tr><th>User</th><th>Email</th><th>Company</th><th>Status</th><th>Assigned Modules</th><th>Account Actions</th></tr></thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.full_name }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.company_name or ('Organization administrator' if user.role == 'admin' else '—') }}</td>
+                        <td>
+                            {% if user.is_active and user.email_verified_at %}
+                                <span class="status-live">Active</span>
+                            {% elif user.invitation_pending %}Invitation pending
+                            {% elif not user.email_verified_at %}
+                                {% if user.role == 'admin' %}Email not verified
+                                {% else %}Invitation expired or revoked{% endif %}
+                            {% elif not user.is_active %}Revoked
+                            {% else %}<span class="status-live">Active</span>{% endif %}
+                        </td>
+                        <td>{{ 'Administrator' if user.role == 'admin' else (user.module_names|join(', ') or '—') }}</td>
+                        <td>
+                            {% if user.role == 'subcontractor' %}
+                                <form method="post" action="{{ url_for('update_subcontractor_modules', user_id=user.user_id) }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                    <div>
+                                        {% for module, label in [
+                                            ('incident_logging', 'Incidents'),
+                                            ('safety_observations', 'Observations'),
+                                            ('site_inspections', 'Inspections'),
+                                            ('monthly_statistics', 'Monthly stats'),
+                                            ('training_performance', 'Training')
+                                        ] %}
+                                            <label class="admin-small">
+                                                <input type="checkbox" name="modules" value="{{ module }}"
+                                                    {% if module in user.modules_list %}checked{% endif %}>
+                                                {{ label }}
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                    <button type="submit">Save Modules</button>
+                                </form>
+                                {% if user.is_active or user.invitation_pending %}
+                                    <form method="post" action="{{ url_for('revoke_subcontractor_user', user_id=user.user_id) }}">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                        <button class="button-danger" type="submit">Revoke User</button>
+                                    </form>
+                                {% endif %}
+                            {% endif %}
+                            {% if user.is_active and user.email_verified_at %}
+                                <form method="post" action="{{ url_for('send_user_password_reset', user_id=user.user_id) }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit">Send Password Reset</button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6">No organization users are available.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

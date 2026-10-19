@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-panel">
+    <p class="eyebrow">CHECK YOUR EMAIL</p>
+    <h2>Verify your administrator account</h2>
+    <p>If registration was accepted, a verification link has been sent to the address provided. The link expires in 30 minutes and can only be used once.</p>
+    <p>After verifying your email, sign in to manage your project workspace.</p>
+    <a class="btn" href="{{ url_for('admin_login') }}">Go to sign in</a>
+    <p><a href="{{ url_for('resend_verification') }}">Didn't receive the email or has the link expired?</a></p>
+</section>
+<style>
+    .auth-panel { max-width: 640px; margin: 2rem auto; padding: 2rem; border: 1px solid #dfe7ef; border-radius: 12px; }
+    .eyebrow { color: var(--do-teal); font-weight: 700; letter-spacing: .12em; font-size: .78rem; }
+</style>
+{% endblock %}

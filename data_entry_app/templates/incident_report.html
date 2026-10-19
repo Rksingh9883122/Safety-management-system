@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    h2 { border-bottom-color: var(--check-orange); }
+</style>
+
+<h2>OSHA-Compliant Incident & Near Miss Report</h2>
+<form action="/submit_incident" method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    
+    <div class="section-header">General Information</div>
+    
+    <div class="form-group">
+        <label for="contractor_id">Contractor / Sub-Contractor:</label>
+        <select name="contractor_id" id="contractor_id" required>
+            <option value="">-- Select Contractor --</option>
+            {% for contractor in contractors %}
+                <option value="{{ contractor.contractor_id }}">
+                    {{ contractor.company_name }} ({{ contractor.contractor_type }})
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group" style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <label for="report_date">Date of Event:</label>
+            <input type="date" name="report_date" id="report_date" required>
+        </div>
+        <div style="flex: 1;">
+            <label for="event_time">Time of Event:</label>
+            <input type="time" name="event_time" id="event_time" required>
+        </div>
+    </div>
+
+    <div class="form-group" style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <label for="employee_age">Worker Age:</label>
+            <input type="number" name="employee_age" id="employee_age" min="14" max="100" step="1" required>
+        </div>
+        <div style="flex: 1;">
+            <label for="employment_date">Date Employed:</label>
+            <input type="date" name="employment_date" id="employment_date" required>
+        </div>
+        <div style="flex: 1;">
+            <label for="employment_type">Employment Type:</label>
+            <select name="employment_type" id="employment_type" required>
+                <option value="">-- Select Employment Type --</option>
+                <option value="Full-time employee">Full-time employee</option>
+                <option value="Contract employee">Contract employee</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="incident_type">Classification (OSHA Standard):</label>
+        <select name="incident_type" id="incident_type" required>
+            <option value="Near Miss">Near Miss</option>
+            <option value="First Aid">First Aid Case</option>
+            <option value="Medical Treatment">Medical Treatment Case (MTC)</option>
+            <option value="Restricted Work Case">Restricted Work Case</option>
+            <option value="LTI">Lost Time Injury (LTI)</option>
+            <option value="Fatality">Fatality</option>
+        </select>
+    </div>
+
+    <div class="section-header">Incident Details (OSHA Form 301 Equivalents)</div>
+
+    <div class="form-group">
+        <label for="activity_type">Activity the worker was involved in:</label>
+        <select name="activity_type" id="activity_type" required>
+            <option value="">-- Select Activity --</option>
+            <optgroup label="Oil &amp; Gas">
+                <option value="Drilling or well servicing">Drilling or well servicing</option>
+                <option value="Pipeline or process operations">Pipeline or process operations</option>
+                <option value="Hot work or welding">Hot work or welding</option>
+                <option value="Lifting, rigging, or material handling">Lifting, rigging, or material handling</option>
+                <option value="Confined-space entry">Confined-space entry</option>
+                <option value="Working at height">Working at height</option>
+                <option value="Hazardous chemical handling">Hazardous chemical handling</option>
+            </optgroup>
+            <optgroup label="Construction">
+                <option value="Excavation or trenching">Excavation or trenching</option>
+                <option value="Scaffolding or work at height">Scaffolding or work at height</option>
+                <option value="Concrete, formwork, or rebar">Concrete, formwork, or rebar</option>
+                <option value="Equipment or vehicle operation">Equipment or vehicle operation</option>
+                <option value="Lifting, rigging, or material handling">Lifting, rigging, or material handling</option>
+                <option value="Electrical installation or maintenance">Electrical installation or maintenance</option>
+                <option value="Demolition">Demolition</option>
+            </optgroup>
+            <optgroup label="Manufacturing">
+                <option value="Machine operation">Machine operation</option>
+                <option value="Machine setup or changeover">Machine setup or changeover</option>
+                <option value="Maintenance or repair">Maintenance or repair</option>
+                <option value="Assembly or production">Assembly or production</option>
+                <option value="Material handling or packaging">Material handling or packaging</option>
+                <option value="Chemical handling">Chemical handling</option>
+            </optgroup>
+            <option value="Other activity">Other activity</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="pre_incident_activity">What was the employee doing just before the incident occurred?</label>
+        <textarea name="pre_incident_activity" id="pre_incident_activity" rows="3" placeholder="Describe the activity, tools, or equipment being used..." required></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="description">What happened? (Describe the sequence of events)</label>
+        <textarea name="description" id="description" rows="4" required></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="injury_details">What was the injury or illness? (If applicable)</label>
+        <textarea name="injury_details" id="injury_details" rows="2" placeholder="e.g., Cut to right index finger, lower back strain"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label for="body_part">Body Part Injured (if applicable):</label>
+        <select name="body_part" id="body_part">
+            <option value="">-- Select Body Part --</option>
+            <option value="Head">Head</option>
+            <option value="Eye">Eye</option>
+            <option value="Face">Face</option>
+            <option value="Neck">Neck</option>
+            <option value="Shoulder">Shoulder</option>
+            <option value="Arm">Arm</option>
+            <option value="Elbow">Elbow</option>
+            <option value="Wrist">Wrist</option>
+            <option value="Hand">Hand</option>
+            <option value="Finger">Finger</option>
+            <option value="Chest">Chest</option>
+            <option value="Back">Back</option>
+            <option value="Abdomen">Abdomen</option>
+            <option value="Hip">Hip</option>
+            <option value="Leg">Leg</option>
+            <option value="Knee">Knee</option>
+            <option value="Ankle">Ankle</option>
+            <option value="Foot">Foot</option>
+            <option value="Multiple body parts">Multiple body parts</option>
+            <option value="Other">Other</option>
+        </select>
+    </div>
+
+    <div class="section-header">Investigation & Corrective Actions</div>
+
+    <div class="form-group">
+        <label for="immediate_causes">Immediate Cause(s):</label>
+        <select name="immediate_causes" id="immediate_causes" multiple size="7" required>
+            <optgroup label="Unsafe Acts">
+                <option value="Unsafe act: failure to follow procedure">Failure to follow procedure</option>
+                <option value="Unsafe act: improper use of equipment">Improper use of equipment</option>
+                <option value="Unsafe act: operating without authorization">Operating without authorization</option>
+                <option value="Unsafe act: bypassing safety device">Bypassing or removing a safety device</option>
+                <option value="Unsafe act: inadequate PPE">Not using or incorrectly using PPE</option>
+                <option value="Unsafe act: unsafe position or posture">Unsafe position, posture, or manual handling</option>
+                <option value="Unsafe act: distraction or rushing">Distraction, rushing, or horseplay</option>
+            </optgroup>
+            <optgroup label="Unsafe Conditions">
+                <option value="Unsafe condition: defective equipment">Defective equipment or tools</option>
+                <option value="Unsafe condition: inadequate guarding">Inadequate machine guarding or barriers</option>
+                <option value="Unsafe condition: poor housekeeping">Poor housekeeping or obstructed access</option>
+                <option value="Unsafe condition: hazardous energy">Uncontrolled hazardous energy</option>
+                <option value="Unsafe condition: hazardous substances">Hazardous substance or exposure</option>
+                <option value="Unsafe condition: environmental conditions">Poor lighting, weather, or other environmental conditions</option>
+            </optgroup>
+            <option value="Immediate cause undetermined">Undetermined / investigation ongoing</option>
+            <option value="Other immediate cause">Other immediate cause</option>
+        </select>
+        <small>Choose all that apply. Use Ctrl (Windows) or Command (Mac) while selecting multiple options.</small>
+    </div>
+
+    <div class="form-group">
+        <label for="underlying_causes">Underlying Cause(s):</label>
+        <select name="underlying_causes" id="underlying_causes" multiple size="7" required>
+            <optgroup label="Personal or Job Factors">
+                <option value="Underlying cause: lack of training">Lack of training or competence</option>
+                <option value="Underlying cause: fatigue or fitness">Fatigue, fitness, or health factor</option>
+                <option value="Underlying cause: inadequate supervision">Inadequate supervision or communication</option>
+                <option value="Underlying cause: inadequate procedure">Inadequate or unclear procedure / risk assessment</option>
+                <option value="Underlying cause: inadequate maintenance">Inadequate inspection or maintenance</option>
+                <option value="Underlying cause: inadequate planning">Inadequate planning, resources, or staffing</option>
+                <option value="Underlying cause: safety management system">Safety management system or work design gap</option>
+            </optgroup>
+            <option value="Underlying cause undetermined">Undetermined / investigation ongoing</option>
+            <option value="Other underlying cause">Other underlying cause</option>
+        </select>
+        <small>Choose all that apply. Use Ctrl (Windows) or Command (Mac) while selecting multiple options.</small>
+    </div>
+
+    <div class="form-group">
+        <label for="corrective_action">Corrective/Preventative Action Taken:</label>
+        <textarea name="corrective_action" id="corrective_action" rows="3" required></textarea>
+    </div>
+
+    <button type="submit">Submit Incident Report</button>
+</form>
+{% endblock %}
